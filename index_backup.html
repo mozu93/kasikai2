@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>会議室予約システム</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .internal-room { background-color: #e0f2fe; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <div class="flex flex-col md:flex-row">
+        <!-- Sidebar -->
+        <aside class="w-full md:w-64 bg-white p-4 space-y-6">
+            <div>
+                <h2 class="text-lg font-bold mb-2">会議室で絞り込む</h2>
+                <div id="room-filter" class="space-y-2"></div>
+            </div>
+            <div>
+                <h2 class="text-lg font-bold mb-2">凡例</h2>
+                <div class="space-y-2">
+                    <div class="flex items-center"><div class="w-4 h-4 bg-blue-500 mr-2"></div><span>外部予約</span></div>
+                    <div class="flex items-center"><div class="w-4 h-4 bg-green-500 mr-2"></div><span>内部予約</span></div>
+                    <div class="flex items-center"><div class="w-4 h-4 bg-gray-300 mr-2"></div><span>空き</span></div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-4 md:p-8">
+            <header class="mb-6">
+                <h1 class="text-3xl font-bold text-gray-800">会議室予約状況</h1>
+            </header>
+
+            <div class="bg-white p-4 rounded-lg shadow-md">
+                <!-- 操作パネル -->
+                <div class="flex flex-wrap items-center justify-between mb-4 gap-4">
+                    <div class="flex items-center space-x-2">
+                        <button id="prev-btn" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">&lt;</button>
+                        <h2 id="current-period" class="text-xl font-semibold"></h2>
+                        <button id="next-btn" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">&gt;</button>
+                        <button id="today-btn" class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">今日</button>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button id="month-view-btn" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">月</button>
+                        <button id="week-view-btn" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">週</button>
+                        <button id="day-view-btn" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">日</button>
+                    </div>
+                </div>
+
+                <!-- 空き状況表示エリア -->
+                <div id="calendar-container" class="overflow-x-auto">
+                    <div id="loading" class="text-center py-8">読み込み中...</div>
+                    <div id="calendar"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const API_URL = 'http://127.0.0.1:5000/api/bookings';
+
+            const rooms = {
+                'hall-1': 'ホールⅠ', 'hall-2': 'ホールⅡ', 'hall-combined': 'ホール全',
+                'medium-room': '中会議室', 'training-room': '研修室', 'small-room': '小会議室',
+                'large-room': '大会議室', 'executive-room': '役員会議室'
+            };
+            const internalRooms = ['large-room', 'executive-room'];
+
+            let bookings = [];
+            let filteredRooms = Object.keys(rooms);
+            let currentDate = new Date();
+            let currentView = 'month'; // month, week, day
+
+            const loadingEl = document.getElementById('loading');
+            const calendarEl = document.getElementById('calendar');
+            const currentPeriodEl = document.getElementById('current-period');
+            const roomFilterEl = document.getElementById('room-filter');
+
+            // --- Event Listeners ---
+            document.getElementById('prev-btn').addEventListener('click', () => moveDate(-1));
+            document.getElementById('next-btn').addEventListener('click', () => moveDate(1));
+            document.getElementById('today-btn').addEventListener('click', showToday);
+            document.getElementById('month-view-btn').addEventListener('click', () => setView('month'));
+            document.getElementById('week-view-btn').addEventListener('click', () => setView('week'));
+            document.getElementById('day-view-btn').addEventListener('click', () => setView('day'));
+
+            // --- Initialization ---
+            async function initialize() {
+                renderRoomFilter();
+                try {
+                    const response = await fetch(API_URL);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    bookings = await response.json();
+                    render();
+                } catch (error) {
+                    console.error("Failed to fetch bookings:", error);
+                    loadingEl.textContent = '予約データの取得に失敗しました。';
+                }
+            }
+
+            // --- State Management ---
+            function moveDate(direction) {
+                if (currentView === 'month') {
+                    currentDate.setMonth(currentDate.getMonth() + direction);
+                } else if (currentView === 'week') {
+                    currentDate.setDate(currentDate.getDate() + 7 * direction);
+                } else {
+                    currentDate.setDate(currentDate.getDate() + direction);
+                }
+                render();
+            }
+
+            function showToday() {
+                currentDate = new Date();
+                render();
+            }
+
+            function setView(view) {
+                currentView = view;
+                render();
+            }
+
+            function updateFilteredRooms() {
+                filteredRooms = Array.from(roomFilterEl.querySelectorAll('input:checked')).map(input => input.value);
+                render();
+            }
+
+            // --- Rendering ---
+            function render() {
+                loadingEl.style.display = 'none';
+                updateCurrentPeriod();
+                if (currentView === 'month') {
+                    renderMonthView();
+                } else if (currentView === 'week') {
+                    renderWeekView();
+                } else {
+                    renderDayView();
+                }
+            }
+
+            function renderRoomFilter() {
+                roomFilterEl.innerHTML = Object.entries(rooms).map(([id, name]) => `
+                    <label class="flex items-center ${internalRooms.includes(id) ? 'internal-room p-1 rounded' : ''}">
+                        <input type="checkbox" value="${id}" checked class="mr-2">
+                        ${name} ${internalRooms.includes(id) ? '(内部用)' : ''}
+                    </label>
+                `).join('');
+                roomFilterEl.querySelectorAll('input').forEach(input => {
+                    input.addEventListener('change', updateFilteredRooms);
+                });
+            }
+
+            function updateCurrentPeriod() {
+                if (currentView === 'month') {
+                    currentPeriodEl.textContent = `${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月`;
+                } else if (currentView === 'week') {
+                    const startOfWeek = new Date(currentDate);
+                    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+                    const endOfWeek = new Date(startOfWeek);
+                    endOfWeek.setDate(endOfWeek.getDate() + 6);
+                    currentPeriodEl.textContent = `${startOfWeek.getFullYear()}年${startOfWeek.getMonth() + 1}月${startOfWeek.getDate()}日 - ${endOfWeek.getFullYear()}年${endOfWeek.getMonth() + 1}月${endOfWeek.getDate()}日`;
+                } else {
+                    currentPeriodEl.textContent = `${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月${currentDate.getDate()}日`;
+                }
+            }
+
+            function getBookingsFor(date, roomId, slot) {
+                const dateStr = date.toISOString().split('T')[0];
+                return bookings.filter(b => 
+                    b.date === dateStr && 
+                    b.slot === slot &&
+                    (b.roomId === roomId || 
+                     (roomId === 'hall-1' && b.roomId === 'hall-combined') ||
+                     (roomId === 'hall-2' && b.roomId === 'hall-combined') ||
+                     (roomId === 'hall-combined' && (b.roomId === 'hall-1' || b.roomId === 'hall-2'))
+                    )
+                );
+            }
+
+            // --- View Renderers ---
+            function renderMonthView() {
+                let html = '<table class="w-full border-collapse"><thead><tr>';
+                const days = ['日', '月', '火', '水', '木', '金', '土'];
+                days.forEach(day => html += `<th class="border p-2">${day}</th>`);
+                html += '</tr></thead><tbody>';
+
+                const year = currentDate.getFullYear();
+                const month = currentDate.getMonth();
+                const firstDay = new Date(year, month, 1);
+                const lastDay = new Date(year, month + 1, 0);
+                const startDate = new Date(firstDay);
+                startDate.setDate(startDate.getDate() - firstDay.getDay());
+
+                let currentDatePointer = new Date(startDate);
+
+                for (let i = 0; i < 6; i++) {
+                    html += '<tr>';
+                    for (let j = 0; j < 7; j++) {
+                        const isCurrentMonth = currentDatePointer.getMonth() === month;
+                        html += `<td class="border p-2 align-top ${isCurrentMonth ? 'bg-white' : 'bg-gray-50'}">
+                            <div class="font-bold ${isCurrentMonth ? 'text-black' : 'text-gray-400'}">${currentDatePointer.getDate()}</div>`;
+
+                        if (isCurrentMonth) {
+                            html += `<div class="grid grid-cols-3 gap-1 text-xs text-center mt-1">
+                                        <div class="font-bold">午前</div>
+                                        <div class="font-bold">午後</div>
+                                        <div class="font-bold">夜間</div>
+                                    </div>`;
+
+                            filteredRooms.forEach(roomId => {
+                                const morningBookings = getBookingsFor(currentDatePointer, roomId, 'morning');
+                                const afternoonBookings = getBookingsFor(currentDatePointer, roomId, 'afternoon');
+                                const nightBookings = getBookingsFor(currentDatePointer, roomId, 'night');
+
+                                const isMorningBooked = morningBookings.length > 0;
+                                const isAfternoonBooked = afternoonBookings.length > 0;
+                                const isNightBooked = nightBookings.length > 0;
+
+                                const isInternalRoom = internalRooms.includes(roomId);
+
+                                html += `<div class="grid grid-cols-3 gap-1 text-xs text-center mt-0.5">
+                                            <div class="${isMorningBooked ? (isInternalRoom ? 'bg-green-500 text-white p-0.5 rounded' : 'bg-blue-500 text-white p-0.5 rounded') : ''}">
+                                                ${isMorningBooked ? rooms[roomId] : ''}
+                                            </div>
+                                            <div class="${isAfternoonBooked ? (isInternalRoom ? 'bg-green-500 text-white p-0.5 rounded' : 'bg-blue-500 text-white p-0.5 rounded') : ''}">
+                                                ${isAfternoonBooked ? rooms[roomId] : ''}
+                                            </div>
+                                            <div class="${isNightBooked ? (isInternalRoom ? 'bg-green-500 text-white p-0.5 rounded' : 'bg-blue-500 text-white p-0.5 rounded') : ''}">
+                                                ${isNightBooked ? rooms[roomId] : ''}
+                                            </div>
+                                        </div>`;
+                            });
+                        }
+                        
+                        html += '</td>';
+                        currentDatePointer.setDate(currentDatePointer.getDate() + 1);
+                    }
+                    html += '</tr>';
+                    if (currentDatePointer > lastDay && i > 3) break;
+                }
+
+                html += '</tbody></table>';
+                calendarEl.innerHTML = html;
+            }
+
+            function renderWeekView() {
+                let html = '<table class="w-full border-collapse"><thead><tr><th class="border p-2">会議室</th>';
+                const slots = { morning: '午前', afternoon: '午後', night: '夜間' };
+                const startOfWeek = new Date(currentDate);
+                startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+
+                for (let i = 0; i < 7; i++) {
+                    const day = new Date(startOfWeek);
+                    day.setDate(day.getDate() + i);
+                    html += `<th class="border p-2">${day.getMonth() + 1}/${day.getDate()}</th>`;
+                }
+                html += '</tr></thead><tbody>';
+
+                filteredRooms.forEach(roomId => {
+                    html += `<tr><td class="border p-2 font-bold ${internalRooms.includes(roomId) ? 'internal-room' : ''}">${rooms[roomId]}</td>`;
+                    for (let i = 0; i < 7; i++) {
+                        const day = new Date(startOfWeek);
+                        day.setDate(day.getDate() + i);
+                        html += '<td class="border p-2 align-top">';
+                        Object.entries(slots).forEach(([slotId, slotName]) => {
+                            const bookings = getBookingsFor(day, roomId, slotId);
+                            const isBooked = bookings.length > 0;
+                            const isInternal = internalRooms.includes(roomId) || (isBooked && internalRooms.includes(bookings[0].roomId));
+                            const purpose = isBooked ? bookings[0].purpose : '空き';
+                            html += `<div class="p-1 my-1 rounded text-xs text-center ${isBooked ? (isInternal ? 'bg-green-500 text-white' : 'bg-blue-500 text-white') : 'bg-gray-300'}">${slotName}: ${purpose}</div>`;
+                        });
+                        html += '</td>';
+                    }
+                    html += '</tr>';
+                });
+
+                html += '</tbody></table>';
+                calendarEl.innerHTML = html;
+            }
+
+            function renderDayView() {
+                let html = '<table class="w-full border-collapse"><thead><tr><th class="border p-2">会議室</th><th class="border p-2">午前</th><th class="border p-2">午後</th><th class="border p-2">夜間</th></tr></thead><tbody>';
+                const slots = { morning: '午前', afternoon: '午後', night: '夜間' };
+
+                filteredRooms.forEach(roomId => {
+                    html += `<tr><td class="border p-2 font-bold ${internalRooms.includes(roomId) ? 'internal-room' : ''}">${rooms[roomId]}</td>`;
+                    Object.entries(slots).forEach(([slotId, slotName]) => {
+                        const bookings = getBookingsFor(currentDate, roomId, slotId);
+                        const isBooked = bookings.length > 0;
+                        const isInternal = internalRooms.includes(roomId) || (isBooked && internalRooms.includes(bookings[0].roomId));
+                        const purpose = isBooked ? `${bookings[0].purpose} (${bookings[0].organization})` : '空き';
+                        html += `<td class="border p-2 text-center ${isBooked ? (isInternal ? 'bg-green-500 text-white' : 'bg-blue-500 text-white') : 'bg-gray-300'}">${purpose}</td>`;
+                    });
+                    html += '</tr>';
+                });
+
+                html += '</tbody></table>';
+                calendarEl.innerHTML = html;
+            }
+
+            initialize();
+        });
+    </script>
+</body>
+</html>

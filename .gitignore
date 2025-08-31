@@ -1,0 +1,63 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+VENV/
+
+# IDE / Editor specific
+.idea/
+.vscode/
+
+# Logs and databases
+*.log
+*.db
+*.sqlite3
+
+# --- Project Specific --- #
+
+# Credentials - DO NOT COMMIT
+credentials.json
+
+# Data folders
+処理済み/
+申し込みデータ/
+
+# Generated files
+bookings.csv
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Misc
+新規 テキスト ドキュメント.txt
+host_app_error.log
