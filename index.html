@@ -112,7 +112,7 @@
             const API_URL = '/api/bookings';
 
             const rooms = {
-                'hall-1': 'ホールⅠ', 'hall-2': 'ホールⅡ', 'hall-combined': 'ホール全',
+                'hall-1': 'ホールⅠ', 'hall-2': 'ホールⅡ',
                 'medium-room': '中会議室', 'training-room': '研修室', 'small-room': '小会議室',
                 'large-room': '大会議室', 'executive-room': '役員会議室'
             };
@@ -318,11 +318,7 @@
                 return bookings.filter(b => 
                     b.date === dateStr && 
                     b.slot === slot &&
-                    (b.roomId === roomId || 
-                     (roomId === 'hall-1' && b.roomId === 'hall-combined') ||
-                     (roomId === 'hall-2' && b.roomId === 'hall-combined') ||
-                     (roomId === 'hall-combined' && (b.roomId === 'hall-1' || b.roomId === 'hall-2'))
-                    )
+                    b.roomId === roomId
                 );
             }
 

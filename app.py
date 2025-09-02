@@ -102,22 +102,43 @@ def parse_booking_data(df):
         for slot in time_slots:
             slot_id = slot_mapping.get(slot)
             if slot_id:
-                booking_entry = row_data.copy()
-                booking_entry['id'] = f"{formatted_date}-{room_id}-{slot_id}"
-                booking_entry['roomId'] = room_id
-                booking_entry['date'] = formatted_date
-                booking_entry['slot'] = slot_id
-                
                 # 「合計金額(予約内容)」が0の場合に特別なフラグを立てる
-                booking_entry['isSpecial'] = False
+                is_special = False
                 total_amount_str = str(row_data.get('合計金額(予約内容)', '')).replace(',', '')
                 try:
                     if total_amount_str.strip() != '' and float(total_amount_str) == 0:
-                        booking_entry['isSpecial'] = True
+                        is_special = True
                 except (ValueError, TypeError):
                     pass # 数値に変換できない場合はFalseのまま
 
-                bookings.append(booking_entry)
+                # 「ホール全」の場合は「ホールⅠ」と「ホールⅡ」の両方に予約を作成
+                if room_id == 'hall-combined':
+                    # ホールⅠの予約を作成
+                    booking_entry_1 = row_data.copy()
+                    booking_entry_1['id'] = f"{formatted_date}-hall-1-{slot_id}"
+                    booking_entry_1['roomId'] = 'hall-1'
+                    booking_entry_1['date'] = formatted_date
+                    booking_entry_1['slot'] = slot_id
+                    booking_entry_1['isSpecial'] = is_special
+                    bookings.append(booking_entry_1)
+                    
+                    # ホールⅡの予約を作成
+                    booking_entry_2 = row_data.copy()
+                    booking_entry_2['id'] = f"{formatted_date}-hall-2-{slot_id}"
+                    booking_entry_2['roomId'] = 'hall-2'
+                    booking_entry_2['date'] = formatted_date
+                    booking_entry_2['slot'] = slot_id
+                    booking_entry_2['isSpecial'] = is_special
+                    bookings.append(booking_entry_2)
+                else:
+                    # 通常の予約を作成
+                    booking_entry = row_data.copy()
+                    booking_entry['id'] = f"{formatted_date}-{room_id}-{slot_id}"
+                    booking_entry['roomId'] = room_id
+                    booking_entry['date'] = formatted_date
+                    booking_entry['slot'] = slot_id
+                    booking_entry['isSpecial'] = is_special
+                    bookings.append(booking_entry)
     return bookings
 
 @app.route('/api/bookings')
