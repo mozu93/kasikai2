@@ -5,19 +5,16 @@ from PIL import Image, ImageDraw
 from pystray import MenuItem as item, Icon as icon
 
 # --- 相対パスでモジュールをインポートするための設定 ---
-# このスクリプトのあるディレクトリをモジュール検索パスに追加
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 try:
     from app import run_web_server
     from upload_script import start_file_watcher
 except ImportError as e:
-    # エラーログをファイルに出力
     with open("host_app_error.log", "w", encoding="utf-8") as f:
         f.write(f"必要なモジュールのインポートに失敗しました: {e}\n")
         f.write("app.py または upload_script.py が見つからないか、内部でエラーが発生しています。\n")
     sys.exit(1)
-
 
 # --- グローバル変数 ---
 web_server_thread = None

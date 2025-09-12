@@ -1,8 +1,6 @@
 flask
 flask_cors
 pandas
-gspread
-google-auth-oauthlib
 watchdog
 pystray
 Pillow

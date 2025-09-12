@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -6,7 +7,7 @@
     <title>会議室予約システム</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .internal-room { background-color: #e0f2fe; }
+        .internal-room { background-color: #e0f2fe; } 
         .special-booking { background-color: #fef08a; color: #1f2937; /* yellow-200 and gray-800 */ }
         .modal {
             display: none; /* Hidden by default */
@@ -58,14 +59,7 @@
                     <div class="flex items-center"><div class="w-4 h-4 bg-gray-300 mr-2"></div><span>空き</span></div>
                 </div>
             </div>
-            <div class="mt-6">
-                <h2 class="text-lg font-bold mb-2">更新履歴 (2025/09)</h2>
-                <ul class="list-disc list-inside text-sm space-y-1 text-gray-700">
-                    <li>ホール全はホールⅠ、Ⅱにコピーして表示させるようにしました。</li>
-                    <li>内部予約を黄色で表示するようにしました。</li>
-                    <li>月表示の日付クリックで日表示に直接遷移するよう変更しました。</li>
-                </ul>
-            </div>
+            
         </aside>
 
         <!-- Main Content -->
@@ -111,19 +105,14 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const API_URL = '/api/bookings';
+            const CONFIG_URL = '/api/config';
 
-            const rooms = {
-                'hall-1': 'ホールⅠ', 'hall-2': 'ホールⅡ',
-                'medium-room': '中会議室', 'training-room': '研修室', 'small-room': '小会議室',
-                'large-room': '大会議室', 'executive-room': '役員会議室'
-            };
-            const internalRooms = ['large-room', 'executive-room'];
-            const weekDayJp = (date) => {
-                return date.toLocaleDateString('ja-JP', { weekday: 'short' });
-            };
-
+            let rooms = {};
+            let internalRoomIds = [];
+            let modalFields = {};
+            
             let bookings = [];
-            let filteredRooms = Object.keys(rooms);
+            let filteredRooms = [];
             let currentDate = new Date();
             let currentView = 'month'; // month, week, day
 
@@ -153,19 +142,107 @@
             document.getElementById('week-view-btn').addEventListener('click', () => setView('week'));
             document.getElementById('day-view-btn').addEventListener('click', () => setView('day'));
 
+            // --- Data Processing Functions ---
+            function parseBookingData(rawBookings, config) {
+                const processedBookings = [];
+                
+                rawBookings.forEach((booking, index) => {
+                    // Skip cancelled bookings
+                    if (booking.cancellation_date && booking.cancellation_date.trim() !== '') {
+                        return;
+                    }
+                    
+                    // Parse date and time slot from booking_datetime
+                    const dateTimeMatch = booking.booking_datetime.match(/(\d{4})年(\d{1,2})月(\d{1,2})日\s+(午前|午後|夜間)/);
+                    if (!dateTimeMatch) {
+                        console.warn('Could not parse booking_datetime:', booking.booking_datetime);
+                        return;
+                    }
+                    
+                    const [, year, month, day, timeSlot] = dateTimeMatch;
+                    const date = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                    
+                    // Map time slot to slot ID
+                    let slot;
+                    switch (timeSlot) {
+                        case '午前': slot = 'morning'; break;
+                        case '午後': slot = 'afternoon'; break;
+                        case '夜間': slot = 'night'; break;
+                        default: 
+                            console.warn('Unknown time slot:', timeSlot);
+                            return;
+                    }
+                    
+                    // Find room ID by CSV name
+                    const roomConfig = config.rooms.find(r => r.csv_name === booking.room_name);
+                    if (!roomConfig) {
+                        console.warn('Room not found in config:', booking.room_name);
+                        return;
+                    }
+                    
+                    // Check if this is a special (internal) booking
+                    const isSpecial = config.internal_room_ids.includes(roomConfig.id);
+                    
+                    processedBookings.push({
+                        id: `booking-${index}`,
+                        date: date,
+                        slot: slot,
+                        roomId: roomConfig.id,
+                        isSpecial: isSpecial,
+                        '案内表示名(予約内容)': booking.display_name,
+                        '事業所名': booking.company_name,
+                        '利用日時(予約内容)': booking.booking_datetime,
+                        '会議室(予約内容)': booking.room_name,
+                        '延長(予約内容)': booking.extension || '',
+                        '備品(予約内容)': booking.equipment || '',
+                        '備考（ご要望や持込機材などございましたらご入力ください。）': booking.notes || '',
+                        'メモ': booking.memo || '',
+                        '利用目的(予約内容)': booking.purpose || '',
+                        '会員種別(予約内容)': booking.member_type || '',
+                        '部署名': booking.department_name || '',
+                        '担当者名': booking.contact_person || '',
+                        '郵便番号': booking.zip_code || ''
+                    });
+                });
+                
+                return processedBookings;
+            }
+
             // --- Initialization ---
             async function initialize() {
-                renderRoomFilter();
                 try {
-                    const response = await fetch(API_URL);
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    bookings = await response.json();
+                    // Fetch config first
+                    const configResponse = await fetch(CONFIG_URL);
+                    if (!configResponse.ok) throw new Error('Failed to load config.json');
+                    const config = await configResponse.json();
+                    
+                    // Process config
+                    rooms = config.rooms.reduce((acc, room) => {
+                        acc[room.id] = room.display_name;
+                        return acc;
+                    }, {});
+                    internalRoomIds = config.internal_room_ids || [];
+                    modalFields = config.modal_fields || {};
+                    
+                    // Filter out hidden rooms from display
+                    const hiddenRoomIds = config.hidden_room_ids || [];
+                    filteredRooms = Object.keys(rooms).filter(roomId => !hiddenRoomIds.includes(roomId));
+
+                    renderRoomFilter();
+
+                    // Fetch bookings
+                    const bookingsResponse = await fetch(API_URL);
+                    if (!bookingsResponse.ok) throw new Error(`HTTP error! status: ${bookingsResponse.status}`);
+                    const rawBookings = await bookingsResponse.json();
+                    
+                    // Process bookings data
+                    bookings = parseBookingData(rawBookings, config);
+                    console.log('Processed bookings:', bookings);
+                    
                     render();
                 } catch (error) {
-                    console.error("Failed to fetch bookings:", error);
-                    loadingEl.textContent = '予約データの取得に失敗しました。';
+                    console.error("Initialization failed:", error);
+                    loadingEl.textContent = `初期化に失敗しました: ${error.message}`;
                 }
             }
 
@@ -191,12 +268,6 @@
                 render();
             }
 
-            function showWeekView(dateStr) {
-                const parts = dateStr.split('-');
-                currentDate = new Date(parts[0], parts[1] - 1, parts[2]);
-                setView('week');
-            }
-
             function showDayView(dateStr) {
                 const parts = dateStr.split('-');
                 currentDate = new Date(parts[0], parts[1] - 1, parts[2]);
@@ -212,38 +283,17 @@
                 const booking = bookings.find(b => b.id === bookingId);
                 if (!booking) return;
 
-                const fields = {
-                    '利用日時': '利用日時(予約内容)',
-                    '会議室': '会議室(予約内容)',
-                    '延長': '延長(予約内容)',
-                    '案内板表示時間': '案内板に表示する時間を入力してください。　例）13：30～',
-                    '案内表示名': '案内表示名(予約内容)',
-                    '備品': '備品(予約内容)',
-                    '備考': '備考（ご要望や持込機材などございましたらご入力ください。）',
-                    'メモ': 'メモ',
-                    '利用目的': '利用目的(予約内容)',
-                    '会員種別': '会員種別(予約内容)',
-                    '事業所名': '事業所名',
-                    '部署名': '部署名',
-                    '担当者名': '担当者名',
-                    '郵便番号': '郵便番号',
-                    '都道府県': '都道府県',
-                    '市区町村': '市区町村',
-                    '以降の住所': '以降の住所',
-                    '電話番号': '電話番号'
-                };
-
                 let detailsHtml = '<dl class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-2">';
-                for (const [label, key] of Object.entries(fields)) {
+                for (const [label, key] of Object.entries(modalFields)) {
                     let value = booking[key] || ''; // データがない場合は空文字
                     
-                    if (label === '利用日時') {
+                    if (label === '利用日時' && booking.date) {
                         const dateParts = booking.date.split('-');
                         const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-                        value = `${value} (${weekDayJp(dateObj)})`;
+                        const weekDay = dateObj.toLocaleDateString('ja-JP', { weekday: 'short' });
+                        value = `${value} (${weekDay})`;
                     }
 
-                    // 備品フィールドを特別に処理
                     if (key === '備品(予約内容)' && typeof value === 'string' && value.length > 1) {
                         let cleanedValue = value.substring(1, value.length - 1);
                         const items = cleanedValue.split(/\]\s*,\s*\[/);
@@ -290,9 +340,9 @@
 
             function renderRoomFilter() {
                 roomFilterEl.innerHTML = Object.entries(rooms).map(([id, name]) => `
-                    <label class="flex items-center ${internalRooms.includes(id) ? 'internal-room p-1 rounded' : ''}">
+                    <label class="flex items-center ${internalRoomIds.includes(id) ? 'internal-room p-1 rounded' : ''}">
                         <input type="checkbox" value="${id}" checked class="mr-2">
-                        ${name} ${internalRooms.includes(id) ? '(内部用)' : ''}
+                        ${name} ${internalRoomIds.includes(id) ? '(内部用)' : ''}
                     </label>
                 `).join('');
                 roomFilterEl.querySelectorAll('input').forEach(input => {
@@ -301,16 +351,21 @@
             }
 
             function updateCurrentPeriod() {
+                const year = currentDate.getFullYear();
+                const month = currentDate.getMonth() + 1;
+                const day = currentDate.getDate();
+                const weekDay = currentDate.toLocaleDateString('ja-JP', { weekday: 'short' });
+
                 if (currentView === 'month') {
-                    currentPeriodEl.textContent = `${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月`;
+                    currentPeriodEl.textContent = `${year}年${month}月`;
                 } else if (currentView === 'week') {
                     const startOfWeek = new Date(currentDate);
                     startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
                     const endOfWeek = new Date(startOfWeek);
                     endOfWeek.setDate(endOfWeek.getDate() + 6);
-                    currentPeriodEl.textContent = `${startOfWeek.getFullYear()}年${startOfWeek.getMonth() + 1}月${startOfWeek.getDate()}日(${weekDayJp(startOfWeek)}) - ${endOfWeek.getFullYear()}年${endOfWeek.getMonth() + 1}月${endOfWeek.getDate()}日(${weekDayJp(endOfWeek)})`;
+                    currentPeriodEl.textContent = `${startOfWeek.getFullYear()}年${startOfWeek.getMonth() + 1}月${startOfWeek.getDate()}日(${startOfWeek.toLocaleDateString('ja-JP', { weekday: 'short' })}) - ${endOfWeek.getFullYear()}年${endOfWeek.getMonth() + 1}月${endOfWeek.getDate()}日(${endOfWeek.toLocaleDateString('ja-JP', { weekday: 'short' })})`;
                 } else {
-                    currentPeriodEl.textContent = `${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月${currentDate.getDate()}日(${weekDayJp(currentDate)})`;
+                    currentPeriodEl.textContent = `${year}年${month}月${day}日(${weekDay})`;
                 }
             }
 
@@ -367,11 +422,9 @@
                                 const isAfternoonSpecial = isAfternoonBooked && afternoonBookings[0].isSpecial;
                                 const isNightSpecial = isNightBooked && nightBookings[0].isSpecial;
 
-                                const isInternalRoom = internalRooms.includes(roomId);
-
-                                const morningClass = isMorningSpecial ? 'special-booking' : (isMorningBooked ? (isInternalRoom ? 'bg-green-500 text-white' : 'bg-blue-500 text-white') : '');
-                                const afternoonClass = isAfternoonSpecial ? 'special-booking' : (isAfternoonBooked ? (isInternalRoom ? 'bg-green-500 text-white' : 'bg-blue-500 text-white') : '');
-                                const nightClass = isNightSpecial ? 'special-booking' : (isNightBooked ? (isInternalRoom ? 'bg-green-500 text-white' : 'bg-blue-500 text-white') : '');
+                                const morningClass = isMorningSpecial ? 'special-booking' : (isMorningBooked ? 'bg-blue-500 text-white' : '');
+                                const afternoonClass = isAfternoonSpecial ? 'special-booking' : (isAfternoonBooked ? 'bg-blue-500 text-white' : '');
+                                const nightClass = isNightSpecial ? 'special-booking' : (isNightBooked ? 'bg-blue-500 text-white' : '');
 
                                 html += `<div class="grid grid-cols-3 gap-1 text-xs text-center mt-0.5">
                                             <div class="${morningClass} p-0.5 rounded">${isMorningBooked ? rooms[roomId] : ''}</div>
@@ -391,7 +444,6 @@
                 html += '</tbody></table>';
                 calendarEl.innerHTML = html;
 
-                // Add event listeners to the new cells
                 calendarEl.querySelectorAll('td[data-date]').forEach(cell => {
                     cell.addEventListener('click', () => {
                         showDayView(cell.dataset.date);
@@ -409,12 +461,13 @@
                     const day = new Date(startOfWeek);
                     day.setDate(day.getDate() + i);
                     const dateStr = toYYYYMMDD(day);
-                    html += `<th class="border p-2 cursor-pointer hover:bg-blue-100" data-date="${dateStr}">${day.getMonth() + 1}/${day.getDate()} (${weekDayJp(day)})</th>`;
+                    const weekDay = day.toLocaleDateString('ja-JP', { weekday: 'short' });
+                    html += `<th class="border p-2 cursor-pointer hover:bg-blue-100" data-date="${dateStr}">${day.getMonth() + 1}/${day.getDate()} (${weekDay})</th>`;
                 }
                 html += '</tr></thead><tbody>';
 
                 filteredRooms.forEach(roomId => {
-                    html += `<tr><td class="border p-2 font-bold ${internalRooms.includes(roomId) ? 'internal-room' : ''}">${rooms[roomId]}</td>`;
+                    html += `<tr><td class="border p-2 font-bold ${internalRoomIds.includes(roomId) ? 'internal-room' : ''}">${rooms[roomId]}</td>`;
                     for (let i = 0; i < 7; i++) {
                         const day = new Date(startOfWeek);
                         day.setDate(day.getDate() + i);
@@ -426,12 +479,8 @@
                             
                             let cellClass = 'bg-gray-300';
                             if (isBooked) {
-                                const isSpecial = bookingsInSlot[0].isSpecial;
-                                const isInternal = internalRooms.includes(roomId) || internalRooms.includes(bookingsInSlot[0].roomId);
-                                if (isSpecial) {
+                                if (bookingsInSlot[0].isSpecial) {
                                     cellClass = 'special-booking';
-                                } else if (isInternal) {
-                                    cellClass = 'bg-green-500 text-white';
                                 } else {
                                     cellClass = 'bg-blue-500 text-white';
                                 }
@@ -446,7 +495,6 @@
                 html += '</tbody></table>';
                 calendarEl.innerHTML = html;
 
-                // Add event listeners to the new headers
                 calendarEl.querySelectorAll('th[data-date]').forEach(header => {
                     header.addEventListener('click', () => {
                         showDayView(header.dataset.date);
@@ -459,20 +507,17 @@
                 const slots = { morning: '午前', afternoon: '午後', night: '夜間' };
 
                 filteredRooms.forEach(roomId => {
-                    html += `<tr><td class="border p-2 font-bold ${internalRooms.includes(roomId) ? 'internal-room' : ''}">${rooms[roomId]}</td>`;
+                    html += `<tr><td class="border p-2 font-bold ${internalRoomIds.includes(roomId) ? 'internal-room' : ''}">${rooms[roomId]}</td>`;
                     Object.entries(slots).forEach(([slotId, slotName]) => {
                         const bookingsInSlot = getBookingsFor(currentDate, roomId, slotId);
                         const isBooked = bookingsInSlot.length > 0;
                         if (isBooked) {
                             const booking = bookingsInSlot[0];
                             const purpose = `${booking['案内表示名(予約内容)'] || ''} (${booking['事業所名'] || ''})`;
-                            const isInternal = internalRooms.includes(roomId) || internalRooms.includes(booking.roomId);
                             
                             let cellClass = '';
                             if (booking.isSpecial) {
                                 cellClass = 'special-booking';
-                            } else if (isInternal) {
-                                cellClass = 'bg-green-500 text-white';
                             } else {
                                 cellClass = 'bg-blue-500 text-white';
                             }
@@ -487,13 +532,15 @@
                 html += '</tbody></table>';
                 calendarEl.innerHTML = html;
 
-                // Add event listeners for modal
                 calendarEl.querySelectorAll('td[data-booking-id]').forEach(cell => {
                     cell.addEventListener('click', () => {
                         showBookingDetails(cell.dataset.bookingId);
                     });
                 });
             }
+
+            // --- Auto-refresh --- 
+            setInterval(initialize, 30000); // 30秒ごとにデータを再取得
 
             initialize();
         });
