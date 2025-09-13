@@ -16,7 +16,7 @@ OUTPUT_CSV = os.path.join(DATA_DIR, 'processed_bookings.csv')
 
 # --- グローバル変数 ---
 upload_timer = None
-UPLOAD_DELAY = 5  # 5秒に変更
+UPLOAD_DELAY = 60  # 1分に変更（複数ファイルの連続保存を考慮）
 
 def load_config():
     try:
@@ -241,13 +241,19 @@ class DebounceEventHandler(FileSystemEventHandler):
             return
 
         global upload_timer
+        
+        # 既存のタイマーがある場合はキャンセルしてリセット
         if upload_timer and upload_timer.is_alive():
             upload_timer.cancel()
+            print(f"{time.ctime()}: 既存のタイマーをキャンセルしました。", flush=True)
 
-        print(f"{time.ctime()}: ファイル変更を検知。タイマーをリセットします。", flush=True)
+        file_name = os.path.basename(event.src_path)
+        event_type = event.event_type
+        print(f"{time.ctime()}: CSVファイル変更を検知: {file_name} ({event_type})", flush=True)
+        print(f"{time.ctime()}: タイマーをリセットし、{UPLOAD_DELAY}秒後に処理をスケジュールしました。", flush=True)
+        
         upload_timer = threading.Timer(UPLOAD_DELAY, process_files)
         upload_timer.start()
-        print(f"{time.ctime()}: {UPLOAD_DELAY}秒後に処理をスケジュールしました。", flush=True)
 
 def start_file_watcher():
     for directory in [INPUT_DIR, PROCESSED_DIR, DATA_DIR]:
@@ -255,7 +261,9 @@ def start_file_watcher():
             os.makedirs(directory)
             print(f'フォルダを作成しました: {directory}', flush=True)
 
-    print(f'{time.ctime()}: 監視を開始します。監視対象: {INPUT_DIR}', flush=True)
+    print(f'{time.ctime()}: ファイル監視を開始します。監視対象: {INPUT_DIR}', flush=True)
+    print(f'全自動データ更新: 申し込みデータフォルダにCSVファイルを置くと、{UPLOAD_DELAY}秒後に自動的にデータが反映されます。', flush=True)
+    print(f'複数ファイルを連続保存する場合、変更を検知するたびにタイマーがリセットされます。', flush=True)
     # 初回起動時に一度処理を実行
     process_files()
     

@@ -52,6 +52,28 @@
                 <div id="room-filter" class="space-y-2"></div>
             </div>
             <div>
+                <h2 class="text-lg font-bold mb-2">📤 CSVアップロード</h2>
+                <div class="space-y-3 mb-6">
+                    <div id="upload-container">
+                        <input type="file" id="csv-file-input" accept=".csv" class="hidden">
+                        <button id="select-file-btn" class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
+                            📁 CSVファイルを選択
+                        </button>
+                        <div id="selected-file" class="mt-2 text-sm text-gray-600 hidden"></div>
+                        <button id="upload-btn" class="w-full px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors mt-2 hidden">
+                            🚀 アップロード実行
+                        </button>
+                    </div>
+                    <div id="upload-status" class="text-sm"></div>
+                    <div id="upload-progress" class="hidden">
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div id="progress-bar" class="bg-blue-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div>
                 <h2 class="text-lg font-bold mb-2">凡例</h2>
                 <div class="space-y-2">
                     <div class="flex items-center"><div class="w-4 h-4 mr-2" style="background-color: #fef08a; border: 1px solid #e5e7eb;"></div><span>内部予約</span></div>
@@ -123,6 +145,15 @@
             const modal = document.getElementById('booking-modal');
             const modalBody = document.getElementById('modal-body');
             const closeButton = document.querySelector('.close-button');
+            
+            // Upload elements
+            const fileInput = document.getElementById('csv-file-input');
+            const selectFileBtn = document.getElementById('select-file-btn');
+            const selectedFileDiv = document.getElementById('selected-file');
+            const uploadBtn = document.getElementById('upload-btn');
+            const uploadStatus = document.getElementById('upload-status');
+            const uploadProgress = document.getElementById('upload-progress');
+            const progressBar = document.getElementById('progress-bar');
 
             // --- Modal Listeners ---
             closeButton.addEventListener('click', () => {
@@ -141,6 +172,120 @@
             document.getElementById('month-view-btn').addEventListener('click', () => setView('month'));
             document.getElementById('week-view-btn').addEventListener('click', () => setView('week'));
             document.getElementById('day-view-btn').addEventListener('click', () => setView('day'));
+            
+            // --- Upload Event Listeners ---
+            selectFileBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFileSelect);
+            uploadBtn.addEventListener('click', handleFileUpload);
+
+            // --- Upload Functions ---
+            function handleFileSelect(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    if (file.type !== 'text/csv' && !file.name.toLowerCase().endsWith('.csv')) {
+                        showUploadStatus('❌ CSVファイルを選択してください。', 'error');
+                        return;
+                    }
+                    
+                    if (file.size > 16 * 1024 * 1024) { // 16MB
+                        showUploadStatus('❌ ファイルサイズが大きすぎます（16MB以下にしてください）。', 'error');
+                        return;
+                    }
+                    
+                    selectedFileDiv.textContent = `📄 選択されたファイル: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                    selectedFileDiv.classList.remove('hidden');
+                    uploadBtn.classList.remove('hidden');
+                    showUploadStatus('✅ ファイルが選択されました。アップロードボタンをクリックしてください。', 'success');
+                } else {
+                    selectedFileDiv.classList.add('hidden');
+                    uploadBtn.classList.add('hidden');
+                    showUploadStatus('', 'info');
+                }
+            }
+            
+            function handleFileUpload() {
+                const file = fileInput.files[0];
+                if (!file) return;
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                // Progress bar を表示
+                uploadProgress.classList.remove('hidden');
+                progressBar.style.width = '0%';
+                uploadBtn.disabled = true;
+                uploadBtn.textContent = '🔄 アップロード中...';
+                
+                showUploadStatus('📤 アップロード中...', 'info');
+                
+                // Simulate progress
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    progress += Math.random() * 30;
+                    if (progress > 90) progress = 90;
+                    progressBar.style.width = progress + '%';
+                }, 100);
+                
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    clearInterval(progressInterval);
+                    progressBar.style.width = '100%';
+                    
+                    setTimeout(() => {
+                        if (data.success) {
+                            showUploadStatus(`✅ ${data.message}`, 'success');
+                            // Reset form
+                            fileInput.value = '';
+                            selectedFileDiv.classList.add('hidden');
+                            uploadBtn.classList.add('hidden');
+                            
+                            // データを再読み込み（1分後）
+                            setTimeout(() => {
+                                initialize();
+                                showUploadStatus('🔄 データが更新されました。', 'success');
+                            }, 61000); // 61秒後に再読み込み
+                            
+                        } else {
+                            showUploadStatus(`❌ ${data.error}`, 'error');
+                        }
+                        
+                        uploadProgress.classList.add('hidden');
+                        uploadBtn.disabled = false;
+                        uploadBtn.textContent = '🚀 アップロード実行';
+                    }, 500);
+                })
+                .catch(error => {
+                    clearInterval(progressInterval);
+                    console.error('Upload error:', error);
+                    showUploadStatus('❌ アップロードに失敗しました。', 'error');
+                    uploadProgress.classList.add('hidden');
+                    uploadBtn.disabled = false;
+                    uploadBtn.textContent = '🚀 アップロード実行';
+                });
+            }
+            
+            function showUploadStatus(message, type) {
+                uploadStatus.textContent = message;
+                uploadStatus.className = 'text-sm ';
+                
+                switch (type) {
+                    case 'success':
+                        uploadStatus.className += 'text-green-600';
+                        break;
+                    case 'error':
+                        uploadStatus.className += 'text-red-600';
+                        break;
+                    case 'info':
+                        uploadStatus.className += 'text-blue-600';
+                        break;
+                    default:
+                        uploadStatus.className += 'text-gray-600';
+                }
+            }
 
             // --- Data Processing Functions ---
             function parseBookingData(rawBookings, config) {
@@ -148,14 +293,19 @@
                 
                 rawBookings.forEach((booking, index) => {
                     // Skip cancelled bookings
-                    if (booking.cancellation_date && booking.cancellation_date.trim() !== '') {
+                    if (booking['取消日(予約内容)'] && booking['取消日(予約内容)'].trim() !== '') {
                         return;
                     }
                     
-                    // Parse date and time slot from booking_datetime
-                    const dateTimeMatch = booking.booking_datetime.match(/(\d{4})年(\d{1,2})月(\d{1,2})日\s+(午前|午後|夜間)/);
+                    // Parse date and time slot from 利用日時(予約内容)
+                    const bookingDateTime = booking['利用日時(予約内容)'];
+                    if (!bookingDateTime) {
+                        console.warn('Missing booking datetime:', booking);
+                        return;
+                    }
+                    const dateTimeMatch = bookingDateTime.match(/(\d{4})年(\d{1,2})月(\d{1,2})日\s+(午前|午後|夜間)/);
                     if (!dateTimeMatch) {
-                        console.warn('Could not parse booking_datetime:', booking.booking_datetime);
+                        console.warn('Could not parse booking_datetime:', bookingDateTime);
                         return;
                     }
                     
@@ -174,9 +324,9 @@
                     }
                     
                     // Find room ID by CSV name
-                    const roomConfig = config.rooms.find(r => r.csv_name === booking.room_name);
+                    const roomConfig = config.rooms.find(r => r.csv_name === booking['会議室(予約内容)']);
                     if (!roomConfig) {
-                        console.warn('Room not found in config:', booking.room_name);
+                        console.warn('Room not found in config:', booking['会議室(予約内容)']);
                         return;
                     }
                     
@@ -189,19 +339,19 @@
                         slot: slot,
                         roomId: roomConfig.id,
                         isSpecial: isSpecial,
-                        '案内表示名(予約内容)': booking.display_name,
-                        '事業所名': booking.company_name,
-                        '利用日時(予約内容)': booking.booking_datetime,
-                        '会議室(予約内容)': booking.room_name,
-                        '延長(予約内容)': booking.extension || '',
-                        '備品(予約内容)': booking.equipment || '',
-                        '備考（ご要望や持込機材などございましたらご入力ください。）': booking.notes || '',
-                        'メモ': booking.memo || '',
-                        '利用目的(予約内容)': booking.purpose || '',
-                        '会員種別(予約内容)': booking.member_type || '',
-                        '部署名': booking.department_name || '',
-                        '担当者名': booking.contact_person || '',
-                        '郵便番号': booking.zip_code || ''
+                        '案内表示名(予約内容)': booking['案内表示名(予約内容)'] || '',
+                        '事業所名': booking['事業所名'] || '',
+                        '利用日時(予約内容)': booking['利用日時(予約内容)'] || '',
+                        '会議室(予約内容)': booking['会議室(予約内容)'] || '',
+                        '延長(予約内容)': booking['延長(予約内容)'] || '',
+                        '備品(予約内容)': booking['備品(予約内容)'] || '',
+                        '備考（ご要望や持込機材などございましたらご入力ください。）': booking['備考（ご要望や持込機材などございましたらご入力ください。）'] || '',
+                        'メモ': booking['メモ'] || '',
+                        '利用目的(予約内容)': booking['利用目的(予約内容)'] || '',
+                        '会員種別(予約内容)': booking['会員種別(予約内容)'] || '',
+                        '部署名': booking['部署名'] || '',
+                        '担当者名': booking['担当者名'] || '',
+                        '郵便番号': booking['郵便番号'] || ''
                     });
                 });
                 

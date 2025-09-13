@@ -10,7 +10,7 @@ CONFIG_FILE = 'config.json'
 class ConfigEditorApp:
     def __init__(self, master):
         self.master = master
-        master.title("🌈 かしかい 設定エディター")
+        master.title("🌈 カシカイ 設定エディター")
         
         # Set modern window size and style
         master.geometry("950x750")
@@ -37,7 +37,7 @@ class ConfigEditorApp:
         header_frame.pack(fill='x')
         header_frame.pack_propagate(False)
         
-        title_label = tk.Label(header_frame, text="🌈 かしかい 設定エディター", 
+        title_label = tk.Label(header_frame, text="🌈 カシカイ 設定エディター", 
                               font=('Yu Gothic UI', 18, 'bold'), bg='#007bff', fg='white')
         title_label.pack(expand=True)
         
@@ -49,26 +49,40 @@ class ConfigEditorApp:
         style = ttk.Style()
         style.theme_use('clam')
         style.configure('Modern.TNotebook', background='#f8f9fa', borderwidth=0)
-        style.configure('Modern.TNotebook.Tab', padding=[20, 12], font=('Yu Gothic UI', 11, 'bold'))
-        style.map('Modern.TNotebook.Tab', background=[('selected', '#007bff'), ('!selected', '#e9ecef')])
-        style.map('Modern.TNotebook.Tab', foreground=[('selected', 'white'), ('!selected', '#495057')])
+        # 選択時は大きく、非選択時は小さく
+        style.configure('Modern.TNotebook.Tab', padding=[20, 8], font=('Yu Gothic UI', 10))
+        style.map('Modern.TNotebook.Tab', 
+                 background=[('selected', '#007bff'), ('!selected', '#e9ecef')],
+                 foreground=[('selected', 'white'), ('!selected', '#495057')],
+                 padding=[('selected', [20, 15]), ('!selected', [20, 8])],
+                 font=[('selected', ('Yu Gothic UI', 11, 'bold')), ('!selected', ('Yu Gothic UI', 10))])
 
         # Notebook for tabs
         self.notebook = ttk.Notebook(master, style='Modern.TNotebook')
         self.notebook.pack(pady=15, padx=15, expand=True, fill='both')
 
         # Create modern tab frames
+        self.data_split_tab_frame = tk.Frame(self.notebook, bg='#f8f9fa')
         self.rooms_tab_frame = tk.Frame(self.notebook, bg='#f8f9fa')
         self.modal_fields_tab_frame = tk.Frame(self.notebook, bg='#f8f9fa')
         
-        self.notebook.add(self.rooms_tab_frame, text="🏢 会議室設定")
+        # 会議室分割表示設定を一番左に配置
+        self.notebook.add(self.data_split_tab_frame, text="🔄 会議室分割表示設定")
+        self.notebook.add(self.rooms_tab_frame, text="🏢 会議室表示設定")
         self.notebook.add(self.modal_fields_tab_frame, text="📋 ポップアップ表示項目")
 
         # Setup scrollable frames for each tab
+        self.setup_scrollable_frame(self.data_split_tab_frame, 'data_split')
         self.setup_scrollable_frame(self.rooms_tab_frame, 'rooms')
         self.setup_scrollable_frame(self.modal_fields_tab_frame, 'modal_fields')
 
+        # Enable mouse wheel scrolling
+        self.bind_mousewheel_to_canvas(self.data_split_canvas)
+        self.bind_mousewheel_to_canvas(self.rooms_canvas)
+        self.bind_mousewheel_to_canvas(self.modal_fields_canvas)
+
         # Setup tabs
+        self.setup_data_split_tab()
         self.setup_rooms_tab()
         self.setup_modal_fields_tab()
 
@@ -142,6 +156,20 @@ class ConfigEditorApp:
         setattr(self, f'{name}_canvas', canvas)
         setattr(self, f'{name}_scrollbar', scrollbar)
         setattr(self, f'{name}_frame', scrollable_frame)
+
+    def bind_mousewheel_to_canvas(self, canvas):
+        """Bind mouse wheel scrolling to canvas"""
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        def _bind_to_mousewheel(event):
+            canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        
+        def _unbind_from_mousewheel(event):
+            canvas.unbind_all("<MouseWheel>")
+        
+        canvas.bind('<Enter>', _bind_to_mousewheel)
+        canvas.bind('<Leave>', _unbind_from_mousewheel)
 
     def load_config(self):
         if os.path.exists(CONFIG_FILE):
@@ -224,11 +252,13 @@ class ConfigEditorApp:
             self.config['data_split_rules'] = []
             for rule_vars in self.data_split_entries:
                 if rule_vars['enabled'].get():
-                    source_room_id = rule_vars['source_room'].get()
+                    source_room_name = rule_vars['source_room'].get()
+                    # Convert display name back to room_id
+                    source_room_id = rule_vars['room_id_map'].get(source_room_name, '')
                     target_room_ids = [room_id for room_id, var in rule_vars['target_rooms'].items() if var.get()]
                     description = rule_vars['description'].get()
                     
-                    if source_room_id != "-- 選択 --" and target_room_ids and description:
+                    if source_room_name != "-- 選択 --" and source_room_id and target_room_ids and description:
                         self.config['data_split_rules'].append({
                             "source_room_id": source_room_id,
                             "target_room_ids": target_room_ids,
@@ -247,6 +277,23 @@ class ConfigEditorApp:
         self.room_entries = []
         self.room_frames = []
 
+        # 説明フレームを他のタブと同じスタイルで追加
+        description_frame = tk.Frame(self.rooms_frame, bg='#e8f5e8', relief='flat', bd=1)
+        description_frame.pack(fill='x', pady=15, padx=20)
+        
+        icon_label = tk.Label(description_frame, text="🏢", font=('Segoe UI Emoji', 20), bg='#e8f5e8')
+        icon_label.pack(pady=10)
+        
+        title_label = tk.Label(description_frame, text="会議室表示設定", 
+                              font=('Yu Gothic UI', 14, 'bold'), bg='#e8f5e8', fg='#2e7d32')
+        title_label.pack(pady=(0, 5))
+        
+        desc_label = tk.Label(description_frame, 
+                             text="カレンダーに表示・非表示、会議室名の編集をします。", 
+                             font=('Yu Gothic UI', 10), bg='#e8f5e8', fg='#424242',
+                             justify='center')
+        desc_label.pack(pady=(0, 10))
+
         # Modern header with icons and styling
         header_frame = tk.Frame(self.rooms_frame, bg='#f8f9fa')
         header_frame.pack(fill='x', pady=10, padx=20)
@@ -262,38 +309,7 @@ class ConfigEditorApp:
         for i, room in enumerate(self.config.get('rooms', [])):
             self.add_room_entry(room, i + 1)
         
-        # データ分割設定を会議室設定タブに統合
-        self.setup_data_split_section()
     
-    def setup_data_split_section(self):
-        """会議室設定タブ内にデータ分割設定セクションを追加"""
-        # 分離線
-        separator = tk.Frame(self.rooms_frame, height=2, bg='#dee2e6')
-        separator.pack(fill='x', padx=20, pady=20)
-        
-        # データ分割設定セクション
-        split_section_frame = tk.Frame(self.rooms_frame, bg='#fff3e0', relief='flat', bd=1)
-        split_section_frame.pack(fill='x', pady=10, padx=20)
-        
-        icon_label = tk.Label(split_section_frame, text="🔀", font=('Segoe UI Emoji', 16), bg='#fff3e0')
-        icon_label.pack(pady=(10, 5))
-        
-        title_label = tk.Label(split_section_frame, text="データ分割設定", 
-                              font=('Yu Gothic UI', 12, 'bold'), bg='#fff3e0', fg='#f57c00')
-        title_label.pack(pady=(0, 5))
-        
-        desc_label = tk.Label(split_section_frame,
-                             text="特定の会議室の予約データを複数の会議室にコピーする設定です。",
-                             font=('Yu Gothic UI', 9), bg='#fff3e0', fg='#424242')
-        desc_label.pack(pady=(0, 10))
-        
-        # Data split rules container
-        self.data_split_container = tk.Frame(split_section_frame, bg='#fff3e0')
-        self.data_split_container.pack(fill='both', expand=True, padx=10, pady=10)
-        
-        self.data_split_entries = []
-        # Load existing rules or create defaults
-        self.populate_data_split_rules()
 
     def setup_modal_fields_tab(self):
         """ポップアップ表示項目タブのセットアップ"""
@@ -571,99 +587,51 @@ class ConfigEditorApp:
             self.room_entries.remove(entry_vars)
             self.room_frames.remove(frame)
 
-    def populate_data_split_rules(self):
-        """既存のデータ分割ルールを読み込み"""
-        for widget in self.data_split_container.winfo_children():
-            widget.destroy()
+
+    def setup_data_split_tab(self):
+        """会議室分割表示設定タブのセットアップ"""
         self.data_split_entries = []
         
+        # 説明テキスト
+        description_frame = tk.Frame(self.data_split_frame, bg='#fff3e0', relief='flat', bd=1)
+        description_frame.pack(fill='x', pady=15, padx=20)
+        
+        icon_label = tk.Label(description_frame, text="🔄", font=('Segoe UI Emoji', 20), bg='#fff3e0')
+        icon_label.pack(pady=10)
+        
+        title_label = tk.Label(description_frame, text="会議室分割表示設定", 
+                              font=('Yu Gothic UI', 14, 'bold'), bg='#fff3e0', fg='#f57c00')
+        title_label.pack(pady=(0, 5))
+        
+        desc_label = tk.Label(description_frame, 
+                             text="特定の会議室の予約データを複数の会議室にコピーして表示することができます。\n例：「ホール全」の予約を「ホールⅠ」と「ホールⅡ」の両方に表示する", 
+                             font=('Yu Gothic UI', 10), bg='#fff3e0', fg='#424242',
+                             justify='center')
+        desc_label.pack(pady=(0, 10))
+        
+        # 既存のルールを表示
         existing_rules = self.config.get('data_split_rules', [])
-        if existing_rules:
-            for rule in existing_rules:
-                self.add_data_split_entry(rule)
-        else:
-            # Add default rule if none exist
+        for rule in existing_rules:
+            self.add_data_split_entry_new(rule)
+        
+        # デフォルトルールがない場合はサンプルを追加
+        if not existing_rules:
             default_rule = {
                 "source_room_id": "hall-combined",
                 "target_room_ids": ["hall-1", "hall-2"],
                 "enabled": True,
                 "description": "ホール全の予約をホールⅠとホールⅡにコピー"
             }
-            self.add_data_split_entry(default_rule)
-
-    def add_data_split_entry(self, rule=None):
-        """データ分割エントリを追加"""
-        rule_frame = tk.Frame(self.data_split_container, bg='white', relief='solid', bd=1)
-        rule_frame.pack(fill='x', pady=5, padx=5, ipady=10)
-
-        # Enable checkbox
-        enabled_var = tk.BooleanVar(value=rule.get('enabled', True) if rule else True)
-        tk.Checkbutton(rule_frame, text="有効", variable=enabled_var, bg='white',
-                      font=('Yu Gothic UI', 10, 'bold')).pack(anchor='w', padx=10, pady=2)
-
-        # Description
-        desc_frame = tk.Frame(rule_frame, bg='white')
-        desc_frame.pack(fill='x', padx=10, pady=2)
-        tk.Label(desc_frame, text="説明:", bg='white', font=('Yu Gothic UI', 10)).pack(side='left')
-        description_var = tk.StringVar(value=rule.get('description', '') if rule else '')
-        tk.Entry(desc_frame, textvariable=description_var, width=50, 
-                font=('Yu Gothic UI', 10), bg='#f8f9fa').pack(side='left', padx=5, fill='x', expand=True)
-
-        # Source room selection
-        source_frame = tk.Frame(rule_frame, bg='white')
-        source_frame.pack(fill='x', padx=10, pady=2)
-        tk.Label(source_frame, text="コピー元:", bg='white', font=('Yu Gothic UI', 10)).pack(side='left')
+            self.add_data_split_entry_new(default_rule)
         
-        source_room_var = tk.StringVar(value=rule.get('source_room_id', '-- 選択 --') if rule else '-- 選択 --')
-        room_options = ["-- 選択 --"] + [room['id'] for room in self.config.get('rooms', [])]
-        source_menu = ttk.OptionMenu(source_frame, source_room_var, source_room_var.get(), *room_options)
-        source_menu.pack(side='left', padx=5)
-
-        # Target rooms selection
-        target_frame = tk.Frame(rule_frame, bg='white')
-        target_frame.pack(fill='x', padx=10, pady=2)
-        tk.Label(target_frame, text="コピー先:", bg='white', font=('Yu Gothic UI', 10)).pack(side='left')
+        # 追加ボタン
+        add_button_frame = tk.Frame(self.data_split_frame, bg='#f8f9fa')
+        add_button_frame.pack(pady=15, fill='x', padx=20)
         
-        target_rooms = {}
-        target_checkboxes_frame = tk.Frame(target_frame, bg='white')
-        target_checkboxes_frame.pack(side='left', padx=5)
-        
-        for room in self.config.get('rooms', []):
-            var = tk.BooleanVar(value=room['id'] in rule.get('target_room_ids', []) if rule else False)
-            tk.Checkbutton(target_checkboxes_frame, text=room['display_name'], 
-                          variable=var, bg='white', font=('Yu Gothic UI', 9)).pack(side='left', padx=5)
-            target_rooms[room['id']] = var
-
-        # Delete button
-        delete_btn = tk.Button(rule_frame, text="🗑 削除", font=('Yu Gothic UI', 10),
-                              bg='#dc3545', fg='white', relief='flat', bd=0,
-                              cursor='hand2', padx=10, pady=5,
-                              command=lambda: self.remove_data_split_entry(rule_frame, entry_vars))
-        delete_btn.pack(anchor='e', padx=10, pady=5)
-
-        entry_vars = {
-            'frame': rule_frame,
-            'enabled': enabled_var,
-            'description': description_var,
-            'source_room': source_room_var,
-            'target_rooms': target_rooms
-        }
-        
-        self.data_split_entries.append(entry_vars)
-        self.update_add_split_button()
-
-    def update_add_split_button(self):
-        """新規分割ルール追加ボタンを更新"""
-        if hasattr(self, 'add_split_button_frame'):
-            self.add_split_button_frame.destroy()
-        
-        self.add_split_button_frame = tk.Frame(self.data_split_container, bg='#f8f9fa')
-        self.add_split_button_frame.pack(fill='x', pady=10)
-        
-        add_button = tk.Button(self.add_split_button_frame, text="➕ 新しい分割ルールを追加",
+        add_button = tk.Button(add_button_frame, text="➕ 新しい分割ルールを追加",
                               font=('Yu Gothic UI', 10, 'bold'), bg='#17a2b8', fg='white',
                               relief='flat', bd=0, cursor='hand2', padx=20, pady=8,
-                              command=lambda: self.add_data_split_entry())
+                              command=self.add_new_data_split_entry_new)
         add_button.pack()
         
         def on_enter_add(e): add_button.config(bg='#138496')
@@ -671,8 +639,103 @@ class ConfigEditorApp:
         add_button.bind('<Enter>', on_enter_add)
         add_button.bind('<Leave>', on_leave_add)
 
-    def remove_data_split_entry(self, frame, rule_vars):
-        """データ分割エントリを削除"""
+    def add_data_split_entry_new(self, rule_data=None):
+        """会議室分割表示エントリを追加（縦並びレイアウト）"""
+        if rule_data is None:
+            rule_data = {
+                "source_room_id": "",
+                "target_room_ids": [],
+                "enabled": False,
+                "description": ""
+            }
+        
+        entry_frame = tk.Frame(self.data_split_frame, bg='white', relief='solid', bd=1)
+        entry_frame.pack(pady=5, padx=20, fill='x', ipady=10)
+        
+        # 有効/無効チェックボックスと説明を上部に配置
+        top_frame = tk.Frame(entry_frame, bg='white')
+        top_frame.pack(fill='x', pady=5, padx=10)
+        
+        enabled_var = tk.BooleanVar(value=rule_data.get('enabled', False))
+        tk.Checkbutton(top_frame, text="有効", variable=enabled_var, font=('Yu Gothic UI', 10, 'bold'), bg='white').pack(side='left', padx=5)
+        
+        # 説明テキスト
+        description_var = tk.StringVar(value=rule_data.get('description', ''))
+        tk.Label(top_frame, text="説明:", font=('Yu Gothic UI', 10), bg='white').pack(side='left', padx=(20, 5))
+        description_entry = tk.Entry(top_frame, textvariable=description_var, width=40, font=('Yu Gothic UI', 10), bg='#f8f9fa')
+        description_entry.pack(side='left', padx=5)
+        
+        # 削除ボタンを右端に配置
+        delete_button = tk.Button(top_frame, text="🗑", fg='white', bg='#dc3545', font=('Segoe UI Emoji', 10),
+                                command=lambda: self.remove_data_split_entry_new(entry_frame, rule_vars),
+                                relief='flat', bd=0, cursor='hand2', width=3)
+        delete_button.pack(side='right', padx=5)
+        
+        # コピー元会議室選択（縦並び）
+        source_frame = tk.Frame(entry_frame, bg='white')
+        source_frame.pack(fill='x', pady=5, padx=20)
+        
+        tk.Label(source_frame, text="コピー元会議室:", font=('Yu Gothic UI', 10, 'bold'), bg='white').pack(anchor='w')
+        
+        # 会議室名を日本語で表示
+        room_options = ["-- 選択 --"]
+        room_id_map = {}
+        
+        for room in self.config.get('rooms', []):
+            display_name = room['display_name']
+            room_options.append(display_name)
+            room_id_map[display_name] = room['id']
+        
+        source_room_var = tk.StringVar()
+        # 既存のroom_idから対応するdisplay_nameを見つける
+        current_source_id = rule_data.get('source_room_id', '')
+        current_source_name = next((room['display_name'] for room in self.config.get('rooms', []) 
+                                  if room['id'] == current_source_id), "-- 選択 --")
+        source_room_var.set(current_source_name)
+        
+        source_menu = ttk.OptionMenu(source_frame, source_room_var, 
+                                    source_room_var.get(), *room_options)
+        source_menu.pack(anchor='w', pady=2)
+        
+        # コピー先会議室選択（縦並び）
+        target_frame = tk.Frame(entry_frame, bg='white')
+        target_frame.pack(fill='x', pady=5, padx=20)
+        
+        tk.Label(target_frame, text="コピー先会議室:", font=('Yu Gothic UI', 10, 'bold'), bg='white').pack(anchor='w')
+        
+        target_room_vars = {}
+        target_room_ids = rule_data.get('target_room_ids', [])
+        
+        target_checkboxes_frame = tk.Frame(target_frame, bg='white')
+        target_checkboxes_frame.pack(anchor='w', pady=2)
+        
+        for room in self.config.get('rooms', []):
+            room_id = room['id']
+            if room_id != rule_data.get('source_room_id'):  # 元会議室は除外
+                var = tk.BooleanVar(value=room_id in target_room_ids)
+                room_name = room['display_name']
+                cb = tk.Checkbutton(target_checkboxes_frame, text=room_name, variable=var, font=('Yu Gothic UI', 10), bg='white')
+                cb.pack(anchor='w')
+                target_room_vars[room_id] = var
+        
+        # エントリ情報を保存（room_id_mapも含める）
+        rule_vars = {
+            'frame': entry_frame,
+            'enabled': enabled_var,
+            'source_room': source_room_var,
+            'target_rooms': target_room_vars,
+            'description': description_var,
+            'room_id_map': room_id_map
+        }
+        
+        self.data_split_entries.append(rule_vars)
+
+    def add_new_data_split_entry_new(self):
+        """新しい会議室分割表示エントリを追加"""
+        self.add_data_split_entry_new()
+        
+    def remove_data_split_entry_new(self, frame, rule_vars):
+        """会議室分割表示エントリを削除"""
         if messagebox.askyesno("確認", "この分割ルールを削除してもよろしいですか？"):
             frame.destroy()
             self.data_split_entries.remove(rule_vars)
