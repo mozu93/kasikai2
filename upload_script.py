@@ -76,12 +76,18 @@ def get_csv_column_mapping():
     config = load_config()
     return config.get('csv_column_mapping', {})
 
+def get_data_split_rules():
+    """設定からデータ分割ルールを取得"""
+    config = load_config()
+    return config.get('data_split_rules', [])
+
 def parse_booking_data(df):
     """DataFrameを解析して予約リストを返す関数"""
     if df.empty:
         return []
 
     room_mapping = get_room_mapping()
+    split_rules = get_data_split_rules()
     # CSVのヘッダーはそのまま保持（英語に変換しない）
 
     bookings = []
@@ -115,7 +121,9 @@ def parse_booking_data(df):
             continue
         room_id = room_mapping.get(room_str)
         if not room_id:
+            print(f"部屋のマッピングが見つかりません: '{room_str}'", flush=True)
             continue
+        print(f"部屋マッピング: '{room_str}' → '{room_id}'", flush=True)
         time_slots = []
         if '・' in time_part:
             time_slots.extend(time_part.split('・'))
@@ -138,14 +146,37 @@ def parse_booking_data(df):
                 booking_base['date'] = formatted_date
                 booking_base['slot'] = slot_id
                 booking_base['isSpecial'] = is_special
+                # 個別の時間帯に合わせて利用日時を更新
+                booking_base['利用日時(予約内容)'] = f"{date_part} {slot}"
 
-                if room_id == 'hall-combined':
-                    for hall_id in ['hall-1', 'hall-2']:
+                # 分割ルールをチェック
+                split_rule = None
+                for rule in split_rules:
+                    if rule.get('enabled', False) and rule.get('source_room_id') == room_id:
+                        split_rule = rule
+                        break
+                
+                if split_rule:
+                    # 分割ルールが適用される場合
+                    print(f"分割ルール適用: {room_id} → {split_rule['target_room_ids']}", flush=True)
+                    config = load_config()
+                    room_id_to_csv_name = {room['id']: room['csv_name'] for room in config['rooms']}
+
+                    for target_room_id in split_rule['target_room_ids']:
                         entry = booking_base.copy()
-                        entry['id'] = f"{formatted_date}-{hall_id}-{slot_id}"
-                        entry['roomId'] = hall_id
+                        entry['id'] = f"{formatted_date}-{target_room_id}-{slot_id}"
+                        entry['roomId'] = target_room_id
+                        # 分割先の会議室名に更新
+                        if target_room_id in room_id_to_csv_name:
+                            old_room_name = entry['会議室(予約内容)']
+                            new_room_name = room_id_to_csv_name[target_room_id]
+                            entry['会議室(予約内容)'] = new_room_name
+                            print(f"会議室名更新: '{old_room_name}' → '{new_room_name}' (roomId: {target_room_id})", flush=True)
+                        else:
+                            print(f"警告: target_room_id '{target_room_id}' がマッピングに見つかりません", flush=True)
                         bookings.append(entry)
                 else:
+                    # 通常の予約
                     entry = booking_base.copy()
                     entry['id'] = f"{formatted_date}-{room_id}-{slot_id}"
                     entry['roomId'] = room_id
@@ -211,10 +242,16 @@ def process_files():
             print("書き込むデータがありません。", flush=True)
         else:
             final_df = pd.DataFrame(final_bookings)
-            # スプレッドシートに不要なヘルパー列を削除 (今回は不要だが、将来的な互換性のため残す)
-            columns_to_drop = ['id', 'roomId', 'date', 'slot', 'isSpecial']
-            existing_columns_to_drop = [col for col in columns_to_drop if col in final_df.columns]
-            final_df = final_df.drop(columns=existing_columns_to_drop, errors='ignore')
+            
+            # 全ての列を保持（config_editor.pywで使用するため）
+            # ヘルパー列を最後に配置
+            helper_columns = ['date', 'slot', 'isSpecial', 'id', 'roomId']
+
+            # 元のCSV列を先に、ヘルパー列を後に配置
+            original_columns = [col for col in final_df.columns if col not in helper_columns]
+            ordered_columns = original_columns + [col for col in helper_columns if col in final_df.columns]
+            final_df = final_df[ordered_columns]
+            
             final_df.to_csv(OUTPUT_CSV, index=False, encoding='utf-8-sig')
             print(f'{len(final_df)}行のデータを {OUTPUT_CSV} に書き込みました。', flush=True)
 

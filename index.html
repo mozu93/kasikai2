@@ -55,7 +55,7 @@
                 <h2 class="text-lg font-bold mb-2">📤 CSVアップロード</h2>
                 <div class="space-y-3 mb-6">
                     <div id="upload-container">
-                        <input type="file" id="csv-file-input" accept=".csv" class="hidden">
+                        <input type="file" id="csv-file-input" accept=".csv" multiple class="hidden">
                         <button id="select-file-btn" class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
                             📁 CSVファイルを選択
                         </button>
@@ -180,19 +180,32 @@
 
             // --- Upload Functions ---
             function handleFileSelect(event) {
-                const file = event.target.files[0];
-                if (file) {
-                    if (file.type !== 'text/csv' && !file.name.toLowerCase().endsWith('.csv')) {
+                const files = Array.from(event.target.files);
+                if (files.length > 0) {
+                    // CSVファイルのみをフィルタ
+                    const csvFiles = files.filter(file => 
+                        file.name.toLowerCase().endsWith('.csv')
+                    );
+                    
+                    if (csvFiles.length === 0) {
                         showUploadStatus('❌ CSVファイルを選択してください。', 'error');
                         return;
                     }
                     
-                    if (file.size > 16 * 1024 * 1024) { // 16MB
+                    // ファイルサイズチェック
+                    const oversizedFiles = csvFiles.filter(file => file.size > 16 * 1024 * 1024);
+                    if (oversizedFiles.length > 0) {
                         showUploadStatus('❌ ファイルサイズが大きすぎます（16MB以下にしてください）。', 'error');
                         return;
                     }
                     
-                    selectedFileDiv.textContent = `📄 選択されたファイル: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                    if (csvFiles.length !== files.length) {
+                        showUploadStatus('⚠️ CSV以外のファイルは除外されました。', 'warning');
+                    }
+                    
+                    const totalSize = csvFiles.reduce((sum, file) => sum + file.size, 0);
+                    const fileNames = csvFiles.map(f => f.name).join(', ');
+                    selectedFileDiv.textContent = `📄 選択されたファイル: ${csvFiles.length}個 (合計: ${(totalSize / 1024).toFixed(1)} KB)\n${fileNames}`;
                     selectedFileDiv.classList.remove('hidden');
                     uploadBtn.classList.remove('hidden');
                     showUploadStatus('✅ ファイルが選択されました。アップロードボタンをクリックしてください。', 'success');
@@ -204,11 +217,20 @@
             }
             
             function handleFileUpload() {
-                const file = fileInput.files[0];
-                if (!file) return;
+                console.log('handleFileUpload called, fileInput.files:', fileInput.files);
+                const files = Array.from(fileInput.files).filter(file => 
+                    file.name.toLowerCase().endsWith('.csv')
+                );
+                console.log('Filtered CSV files:', files);
+                if (files.length === 0) {
+                    showUploadStatus('❌ CSVファイルが選択されていません。', 'error');
+                    return;
+                }
                 
                 const formData = new FormData();
-                formData.append('file', file);
+                files.forEach((file, index) => {
+                    formData.append('files', file);
+                });
                 
                 // Progress bar を表示
                 uploadProgress.classList.remove('hidden');
@@ -303,7 +325,7 @@
                         console.warn('Missing booking datetime:', booking);
                         return;
                     }
-                    const dateTimeMatch = bookingDateTime.match(/(\d{4})年(\d{1,2})月(\d{1,2})日\s+(午前|午後|夜間)/);
+                    const dateTimeMatch = bookingDateTime.match(/(\d{4})年(\d{1,2})月(\d{1,2})日\s+(午前|午後|夜間|一日)/);
                     if (!dateTimeMatch) {
                         console.warn('Could not parse booking_datetime:', bookingDateTime);
                         return;
@@ -318,20 +340,31 @@
                         case '午前': slot = 'morning'; break;
                         case '午後': slot = 'afternoon'; break;
                         case '夜間': slot = 'night'; break;
+                        case '一日': 
+                            // 一日の場合はサーバー側で既に分割済みなので、
+                            // 実際にはこのケースは発生しないはず
+                            console.warn('一日データが分割されていません:', bookingDateTime);
+                            return;
                         default: 
                             console.warn('Unknown time slot:', timeSlot);
                             return;
                     }
                     
-                    // Find room ID by CSV name
-                    const roomConfig = config.rooms.find(r => r.csv_name === booking['会議室(予約内容)']);
+                    // Find room config by roomId first (for split room handling), then fallback to CSV name
+                    let roomConfig = config.rooms.find(r => r.id === booking.roomId);
                     if (!roomConfig) {
-                        console.warn('Room not found in config:', booking['会議室(予約内容)']);
+                        // Fallback to CSV name for compatibility
+                        roomConfig = config.rooms.find(r => r.csv_name === booking['会議室(予約内容)']);
+                    }
+                    if (!roomConfig) {
+                        console.warn('Room not found in config:', booking['会議室(予約内容)'], 'roomId:', booking.roomId);
                         return;
                     }
                     
-                    // Check if this is a special (internal) booking
-                    const isSpecial = config.internal_room_ids.includes(roomConfig.id);
+                    // Check if this is a special booking (either internal room or zero amount)
+                    const isInternalRoom = config.internal_room_ids.includes(roomConfig.id);
+                    const isSpecialAmount = booking.isSpecial === true; // from CSV processing (zero amount)
+                    const isSpecial = isInternalRoom || isSpecialAmount;
                     
                     processedBookings.push({
                         id: `booking-${index}`,
