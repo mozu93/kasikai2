@@ -232,7 +232,7 @@ def run_web_server():
     print(f"Access the application from this PC at: http://127.0.0.1:{port}")
     print(f"Access from other devices on the same network using: http://{host_ip}:{port}")
     print("-------------------------------------------------")
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True, use_reloader=False)
 
 if __name__ == '__main__':
     run_web_server()
