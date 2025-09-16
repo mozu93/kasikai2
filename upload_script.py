@@ -9,8 +9,8 @@ import json # Added import json
 # --- 設定項目 ---
 CONFIG_FILE = 'config.json'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-INPUT_DIR = os.path.join(BASE_DIR, '申し込みデータ')
-PROCESSED_DIR = os.path.join(BASE_DIR, '処理済み')
+INPUT_DIR = os.path.join(BASE_DIR, 'uploads')
+PROCESSED_DIR = os.path.join(BASE_DIR, 'processed')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 OUTPUT_CSV = os.path.join(DATA_DIR, 'processed_bookings.csv')
 

@@ -19,7 +19,7 @@ CONFIG_FILE = 'config.json'
 # --- 設定項目 ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
-UPLOAD_DIR = os.path.join(BASE_DIR, '申し込みデータ')
+UPLOAD_DIR = os.path.join(BASE_DIR, 'uploads')
 BOOKINGS_CSV = os.path.join(DATA_DIR, 'processed_bookings.csv')
 
 # アップロード設定
@@ -27,7 +27,7 @@ ALLOWED_EXTENSIONS = {'csv'}
 MAX_FILE_SIZE = 16 * 1024 * 1024  # 16MB
 
 app = Flask(__name__)
-app.secret_key = 'kasikai_upload_secret_key_2025'  # セッション用
+app.secret_key = 'meeting_room_system_secret_key_2025'  # セッション用
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 CORS(app)
 
