@@ -48,7 +48,10 @@ def ensure_upload_dir():
 
 @app.route('/')
 def serve_index():
-    return send_from_directory('.', 'index.html')
+    try:
+        return send_from_directory(BASE_DIR, 'index.html')
+    except FileNotFoundError:
+        return "index.html not found", 404
 
 def fetch_from_csv():
     """CSVファイルからデータを取得する関数"""
@@ -67,7 +70,16 @@ def fetch_from_csv():
 
     logging.info("Fetching new data from CSV...")
     try:
-        df = pd.read_csv(BOOKINGS_CSV, encoding='utf-8-sig')
+        # Try multiple encodings for Japanese CSV files
+        for encoding in ['utf-8-sig', 'cp932', 'shift_jis', 'utf-8']:
+            try:
+                df = pd.read_csv(BOOKINGS_CSV, encoding=encoding)
+                logging.info(f"Successfully loaded CSV with encoding: {encoding}")
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            raise Exception("Could not decode CSV file with any supported encoding")
         # pandasは空の値をNaNとして読み込むため、空の文字列に変換する
         df = df.fillna('')
         bookings = df.to_dict('records')
