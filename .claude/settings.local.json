@@ -3,7 +3,11 @@
     "allow": [
       "Bash(python:*)",
       "Bash(git add:*)",
-      "Bash(git remote set-url:*)"
+      "Bash(git remote set-url:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(git commit:*)",
+      "mcp__serena__find_symbol"
     ],
     "deny": [],
     "ask": []

@@ -131,6 +131,28 @@ def process_csv_files():
             # Fill NaN values with empty strings
             combined_df = combined_df.fillna('')
 
+            # Process "一日" bookings - split into 午前, 午後, 夜間
+            processed_rows = []
+            config = load_config()
+            csv_column_mapping = config.get('csv_column_mapping', {}) if config else {}
+            datetime_col = csv_column_mapping.get('booking_datetime', '利用日時(予約内容)')
+
+            for index, row in combined_df.iterrows():
+                datetime_value = str(row.get(datetime_col, ''))
+                if '一日' in datetime_value:
+                    # Split "一日" into three time slots
+                    base_datetime = datetime_value.replace('一日', '')
+                    for time_slot in ['午前', '午後', '夜間']:
+                        new_row = row.copy()
+                        new_row[datetime_col] = base_datetime + time_slot
+                        processed_rows.append(new_row)
+                else:
+                    processed_rows.append(row)
+
+            # Create new dataframe with processed rows
+            if processed_rows:
+                combined_df = pd.DataFrame(processed_rows)
+
             # Save combined data
             combined_df.to_csv(BOOKINGS_CSV, index=False, encoding='utf-8-sig')
             logging.info(f"Combined CSV saved: {len(combined_df)} total rows")

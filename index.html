@@ -9,6 +9,7 @@
     <style>
         .internal-room { background-color: #e0f2fe; } 
         .special-booking { background-color: #fef08a; color: #1f2937; /* yellow-200 and gray-800 */ }
+        .today-highlight { background-color: #fce7f3 !important; /* pink-100 */ }
         .modal {
             display: none; /* Hidden by default */
             position: fixed; /* Stay in place */
@@ -146,6 +147,26 @@
                     </div>
                 </div>
 
+                <!-- 検索パネル -->
+                <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="flex-1">
+                            <input type="text" id="search-input" placeholder="案内表示名、事業所名、担当者名、メモなど全項目を検索..."
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <button id="search-clear-btn" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 hidden">
+                            🗑️ クリア
+                        </button>
+                    </div>
+                    <div id="search-results-count" class="text-sm text-gray-600 mt-2 hidden"></div>
+                </div>
+
+                <!-- 検索結果表示エリア -->
+                <div id="search-results-container" class="hidden">
+                    <h3 class="text-lg font-semibold mb-4">🔍 検索結果</h3>
+                    <div id="search-results" class="space-y-3"></div>
+                </div>
+
                 <!-- 空き状況表示エリア -->
                 <div id="calendar-container" class="overflow-x-auto">
                     <div id="loading" class="text-center py-8">読み込み中...</div>
@@ -177,6 +198,8 @@
             let filteredRooms = [];
             let currentDate = new Date();
             let currentView = 'month'; // month, week, day
+            let searchMode = false;
+            let searchResultsData = [];
 
             const loadingEl = document.getElementById('loading');
             const calendarEl = document.getElementById('calendar');
@@ -185,6 +208,14 @@
             const modal = document.getElementById('booking-modal');
             const modalBody = document.getElementById('modal-body');
             const closeButton = document.querySelector('.close-button');
+
+            // Search elements
+            const searchInput = document.getElementById('search-input');
+            const searchClearBtn = document.getElementById('search-clear-btn');
+            const searchResultsCount = document.getElementById('search-results-count');
+            const searchResultsContainer = document.getElementById('search-results-container');
+            const searchResultsEl = document.getElementById('search-results');
+            const calendarContainer = document.getElementById('calendar-container');
             
             // Upload elements
             const fileInput = document.getElementById('csv-file-input');
@@ -212,6 +243,24 @@
             document.getElementById('month-view-btn').addEventListener('click', () => setView('month'));
             document.getElementById('week-view-btn').addEventListener('click', () => setView('week'));
             document.getElementById('day-view-btn').addEventListener('click', () => setView('day'));
+
+            // Search event listeners
+            let searchTimeout;
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    performSearch(e.target.value);
+                }, 300);
+            });
+
+            searchClearBtn.addEventListener('click', exitSearchMode);
+
+            // ESCキーで検索をクリア
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && searchMode) {
+                    exitSearchMode();
+                }
+            });
             
             // --- Upload Event Listeners ---
             selectFileBtn.addEventListener('click', () => fileInput.click());
@@ -380,7 +429,7 @@
                         case '午前': slot = 'morning'; break;
                         case '午後': slot = 'afternoon'; break;
                         case '夜間': slot = 'night'; break;
-                        case '一日': 
+                        case '一日':
                             // 一日の場合はサーバー側で既に分割済みなので、
                             // 実際にはこのケースは発生しないはず
                             console.warn('一日データが分割されていません:', bookingDateTime);
@@ -397,8 +446,27 @@
                         roomConfig = config.rooms.find(r => r.csv_name === booking['会議室(予約内容)']);
                     }
                     if (!roomConfig) {
+                        // 文字正規化でマッチングを試行（全角・半角数字、括弧の違いなど）
+                        const normalizedRoomName = booking['会議室(予約内容)']
+                            .replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+                            .replace(/（/g, '(')
+                            .replace(/）/g, ')');
+                        roomConfig = config.rooms.find(r => {
+                            const normalizedConfigName = r.csv_name
+                                .replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+                                .replace(/（/g, '(')
+                                .replace(/）/g, ')');
+                            return normalizedConfigName === normalizedRoomName;
+                        });
+                    }
+                    if (!roomConfig) {
                         console.warn('Room not found in config:', booking['会議室(予約内容)'], 'roomId:', booking.roomId);
-                        return;
+                        // Room configが見つからない場合でも、ダミーの設定でデータを処理する
+                        roomConfig = {
+                            id: `unknown-${index}`,
+                            csv_name: booking['会議室(予約内容)'],
+                            display_name: booking['会議室(予約内容)']
+                        };
                     }
                     
                     // Check if this is a special booking (either internal room or zero amount)
@@ -523,6 +591,103 @@
                 }
             }
 
+            // --- Search Functions ---
+            function performSearch(searchTerm) {
+                if (!searchTerm || searchTerm.trim().length < 2) {
+                    exitSearchMode();
+                    return;
+                }
+
+                const term = searchTerm.toLowerCase().trim();
+                const results = bookings.filter(booking => {
+                    return Object.values(booking).some(value =>
+                        String(value).toLowerCase().includes(term)
+                    );
+                });
+
+                searchResultsData = results.sort((a, b) => {
+                    const dateA = new Date(a.date);
+                    const dateB = new Date(b.date);
+                    return dateA - dateB;
+                });
+
+                searchMode = true;
+                searchClearBtn.classList.remove('hidden');
+                searchResultsCount.classList.remove('hidden');
+                searchResultsCount.textContent = `${searchResultsData.length}件の結果が見つかりました`;
+
+                render();
+            }
+
+            function renderSearchResults() {
+                calendarContainer.classList.add('hidden');
+                searchResultsContainer.classList.remove('hidden');
+
+                if (searchResultsData.length === 0) {
+                    searchResultsEl.innerHTML = '<div class="text-gray-500 text-center py-8">該当する予約が見つかりませんでした</div>';
+                    return;
+                }
+
+                const html = searchResultsData.map((booking, index) => {
+                    const dateObj = new Date(booking.date);
+                    const weekDay = dateObj.toLocaleDateString('ja-JP', { weekday: 'short' });
+                    const formattedDate = `${dateObj.getFullYear()}年${dateObj.getMonth() + 1}月${dateObj.getDate()}日(${weekDay})`;
+
+                    const displayName = booking['案内表示名(予約内容)'] || '名称未設定';
+                    const companyName = booking['事業所名'] || '';
+                    const contactPerson = booking['担当者名'] || '';
+                    const roomName = rooms[booking.roomId] || booking['会議室(予約内容)'];
+                    const slotName = booking.slot === 'morning' ? '午前' : booking.slot === 'afternoon' ? '午後' : '夜間';
+                    const isSpecial = booking.isSpecial;
+
+                    const specialClass = isSpecial ? 'border-yellow-300 bg-yellow-50' : 'border-blue-300 bg-blue-50';
+
+                    return `
+                        <div class="border-2 ${specialClass} rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow search-result-item"
+                             data-booking-id="${booking.id}">
+                            <div class="flex justify-between items-start mb-2">
+                                <h4 class="font-semibold text-lg">${displayName}</h4>
+                                <span class="text-sm px-2 py-1 ${isSpecial ? 'bg-yellow-200 text-yellow-800' : 'bg-blue-200 text-blue-800'} rounded">
+                                    ${isSpecial ? '無料貸出' : '有料貸出'}
+                                </span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                                <div><strong>日時:</strong> ${formattedDate}</div>
+                                <div><strong>会議室:</strong> ${roomName}</div>
+                                <div><strong>時間帯:</strong> ${slotName}</div>
+                                <div><strong>事業所:</strong> ${companyName}</div>
+                                ${contactPerson ? `<div class="col-span-2"><strong>担当者:</strong> ${contactPerson}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                searchResultsEl.innerHTML = html;
+
+                // イベントリスナーを追加
+                searchResultsEl.querySelectorAll('.search-result-item').forEach((item, index) => {
+                    item.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const bookingId = item.dataset.bookingId;
+                        const booking = searchResultsData[index];
+                        console.log('Search result clicked, booking ID:', bookingId);
+                        console.log('Search result booking data:', booking);
+                        showBookingDetailsFromSearch(booking);
+                    });
+                });
+            }
+
+            function exitSearchMode() {
+                searchMode = false;
+                searchResultsData = [];
+                searchInput.value = '';
+                searchClearBtn.classList.add('hidden');
+                searchResultsCount.classList.add('hidden');
+                searchResultsContainer.classList.add('hidden');
+                calendarContainer.classList.remove('hidden');
+                render();
+            }
+
             // --- State Management ---
             function moveDate(direction) {
                 if (currentView === 'month') {
@@ -557,11 +722,68 @@
             }
 
             function showBookingDetails(bookingId) {
+                console.log('showBookingDetails called with:', bookingId);
+                console.log('Available bookings:', bookings);
                 const booking = bookings.find(b => b.id === bookingId);
-                if (!booking) return;
+                console.log('Found booking:', booking);
+                if (!booking) {
+                    console.error('Booking not found for ID:', bookingId);
+                    return;
+                }
 
                 let detailsHtml = '<dl class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-2">';
-                for (const [label, key] of Object.entries(modalFields)) {
+                // modalFieldsを定義順序で処理するため配列化
+                const fieldsOrder = [
+                    ['申込NO', '申込NO'],
+                    ['利用日時(予約内容)', '利用日時(予約内容)'],
+                    ['会議室(予約内容)', '会議室(予約内容)'],
+                    ['延長(予約内容)', '延長(予約内容)'],
+                    ['備品(予約内容)', '備品(予約内容)'],
+                    ['案内表示名(予約内容)', '案内表示名(予約内容)'],
+                    ['会員種別(予約内容)', '会員種別(予約内容)'],
+                    ['事業所名', '事業所名'],
+                    ['事業所名カナ', '事業所名カナ'],
+                    ['申込日', '申込日'],
+                    ['部署名', '部署名'],
+                    ['担当者名', '担当者名'],
+                    ['電話番号', '電話番号'],
+                    ['支払額合計', '支払額合計'],
+                    ['支払種別', '支払種別'],
+                    ['入金日(予約内容)', '入金日(予約内容)'],
+                    ['合計金額(予約内容)', '合計金額(予約内容)'],
+                    ['自由設定項目5', '自由設定項目5'],
+                    ['合計料金', '合計料金'],
+                    ['支払い済み合計料金', '支払い済み合計料金'],
+                    ['未払い合計料金', '未払い合計料金'],
+                    ['会員種別', '会員種別'],
+                    ['利用目的(予約内容)', '利用目的(予約内容)'],
+                    ['会議室料金', '会議室料金'],
+                    ['延長料金', '延長料金'],
+                    ['取消日(予約内容)', '取消日(予約内容)'],
+                    ['備品料金', '備品料金'],
+                    ['冷房料金', '冷房料金'],
+                    ['暖房料金', '暖房料金'],
+                    ['調整金', '調整金'],
+                    ['キャンセル料', 'キャンセル料'],
+                    ['コンビニ種別', 'コンビニ種別'],
+                    ['クレジット種別', 'クレジット種別'],
+                    ['受付承認', '受付承認'],
+                    ['最終更新日', '最終更新日'],
+                    ['入金日', '入金日'],
+                    ['取消日', '取消日'],
+                    ['取消申請', '取消申請'],
+                    ['確定日', '確定日'],
+                    ['メモ', 'メモ'],
+                    ['顧客NO', '顧客NO'],
+                    ['メール', 'メール'],
+                    ['会員番号', '会員番号'],
+                    ['郵便番号', '郵便番号'],
+                    ['都道府県', '都道府県'],
+                    ['市区町村', '市区町村'],
+                    ['以降の住所', '以降の住所'],
+                    ['FAX番号', 'FAX番号']
+                ];
+                for (const [label, key] of fieldsOrder) {
                     let value = booking[key] || ''; // データがない場合は空文字
                     
                     if (label === '利用日時' && booking.date) {
@@ -595,6 +817,81 @@
                 modal.style.display = 'block';
             }
 
+            function showBookingDetailsFromSearch(booking) {
+                console.log('showBookingDetailsFromSearch called with:', booking);
+                if (!booking) {
+                    console.error('No booking data provided');
+                    return;
+                }
+
+                let detailsHtml = '<dl class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-2">';
+                // modalFieldsを定義順序で処理するため配列化
+                const fieldsOrder = [
+                    ['申込NO', '申込NO'],
+                    ['利用日時(予約内容)', '利用日時(予約内容)'],
+                    ['会議室(予約内容)', '会議室(予約内容)'],
+                    ['延長(予約内容)', '延長(予約内容)'],
+                    ['備品(予約内容)', '備品(予約内容)'],
+                    ['案内表示名(予約内容)', '案内表示名(予約内容)'],
+                    ['会員種別(予約内容)', '会員種別(予約内容)'],
+                    ['事業所名', '事業所名'],
+                    ['事業所名カナ', '事業所名カナ'],
+                    ['申込日', '申込日'],
+                    ['部署名', '部署名'],
+                    ['担当者名', '担当者名'],
+                    ['電話番号', '電話番号'],
+                    ['支払額合計', '支払額合計'],
+                    ['支払種別', '支払種別'],
+                    ['入金日(予約内容)', '入金日(予約内容)'],
+                    ['合計金額(予約内容)', '合計金額(予約内容)'],
+                    ['自由設定項目5', '自由設定項目5'],
+                    ['合計料金', '合計料金'],
+                    ['支払い済み合計料金', '支払い済み合計料金'],
+                    ['未払い合計料金', '未払い合計料金'],
+                    ['会員種別', '会員種別'],
+                    ['利用目的(予約内容)', '利用目的(予約内容)'],
+                    ['会議室料金', '会議室料金'],
+                    ['延長料金', '延長料金'],
+                    ['取消日(予約内容)', '取消日(予約内容)'],
+                    ['備品料金', '備品料金'],
+                    ['冷房料金', '冷房料金'],
+                    ['暖房料金', '暖房料金'],
+                    ['調整金', '調整金'],
+                    ['キャンセル料', 'キャンセル料'],
+                    ['コンビニ種別', 'コンビニ種別'],
+                    ['クレジット種別', 'クレジット種別'],
+                    ['受付承認', '受付承認'],
+                    ['最終更新日', '最終更新日'],
+                    ['入金日', '入金日'],
+                    ['取消日', '取消日'],
+                    ['取消申請', '取消申請'],
+                    ['確定日', '確定日'],
+                    ['メモ', 'メモ'],
+                    ['顧客NO', '顧客NO'],
+                    ['メール', 'メール'],
+                    ['会員番号', '会員番号'],
+                    ['郵便番号', '郵便番号'],
+                    ['都道府県', '都道府県'],
+                    ['市区町村', '市区町村'],
+                    ['以降の住所', '以降の住所'],
+                    ['FAX番号', 'FAX番号']
+                ];
+
+                fieldsOrder.forEach(([key, displayKey]) => {
+                    const value = booking[key];
+                    if (value !== undefined && value !== '') {
+                        detailsHtml += `
+                            <dt class="font-medium text-gray-900">${displayKey}:</dt>
+                            <dd class="mt-1 text-gray-700 md:col-span-2">${value}</dd>
+                        `;
+                    }
+                });
+                detailsHtml += '</dl>';
+
+                modalBody.innerHTML = detailsHtml;
+                modal.style.display = 'block';
+            }
+
             function toYYYYMMDD(date) {
                 const y = date.getFullYear();
                 const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -604,14 +901,18 @@
 
             // --- Rendering ---
             function render() {
-                loadingEl.style.display = 'none';
-                updateCurrentPeriod();
-                if (currentView === 'month') {
-                    renderMonthView();
-                } else if (currentView === 'week') {
-                    renderWeekView();
+                if (searchMode) {
+                    renderSearchResults();
                 } else {
-                    renderDayView();
+                    loadingEl.style.display = 'none';
+                    updateCurrentPeriod();
+                    if (currentView === 'month') {
+                        renderMonthView();
+                    } else if (currentView === 'week') {
+                        renderWeekView();
+                    } else {
+                        renderDayView();
+                    }
                 }
             }
 
@@ -677,7 +978,9 @@
                     for (let j = 0; j < 7; j++) {
                         const isCurrentMonth = currentDatePointer.getMonth() === month;
                         const dateStr = toYYYYMMDD(currentDatePointer);
-                        html += `<td class="border p-2 align-top ${isCurrentMonth ? 'bg-white cursor-pointer hover:bg-blue-100' : 'bg-gray-50'}" data-date="${dateStr}">
+                        const isToday = toYYYYMMDD(new Date()) === dateStr;
+                        const cellClass = isCurrentMonth ? (isToday ? 'today-highlight cursor-pointer hover:bg-pink-200' : 'bg-white cursor-pointer hover:bg-blue-100') : 'bg-gray-50';
+                        html += `<td class="border p-2 align-top ${cellClass}" data-date="${dateStr}">
                             <div class="font-bold ${isCurrentMonth ? 'text-black' : 'text-gray-400'}">${currentDatePointer.getDate()}</div>`;
 
                         if (isCurrentMonth) {
@@ -740,7 +1043,9 @@
                     day.setDate(day.getDate() + i);
                     const dateStr = toYYYYMMDD(day);
                     const weekDay = day.toLocaleDateString('ja-JP', { weekday: 'short' });
-                    html += `<th class="border p-2 cursor-pointer hover:bg-blue-100" data-date="${dateStr}">${day.getMonth() + 1}/${day.getDate()} (${weekDay})</th>`;
+                    const isToday = toYYYYMMDD(new Date()) === dateStr;
+                    const headerClass = isToday ? 'today-highlight cursor-pointer hover:bg-pink-200' : 'cursor-pointer hover:bg-blue-100';
+                    html += `<th class="border p-2 ${headerClass}" data-date="${dateStr}">${day.getMonth() + 1}/${day.getDate()} (${weekDay})</th>`;
                 }
                 html += '</tr></thead><tbody>';
 
@@ -749,7 +1054,10 @@
                     for (let i = 0; i < 7; i++) {
                         const day = new Date(startOfWeek);
                         day.setDate(day.getDate() + i);
-                        html += '<td class="border p-2 align-top">';
+                        const dateStr = toYYYYMMDD(day);
+                        const isToday = toYYYYMMDD(new Date()) === toYYYYMMDD(day);
+                        const cellClass = isToday ? 'today-highlight cursor-pointer hover:bg-pink-200' : 'cursor-pointer hover:bg-blue-100';
+                        html += `<td class="border p-2 align-top ${cellClass}" data-date="${dateStr}">`;
                         Object.entries(slots).forEach(([slotId, slotName]) => {
                             const bookingsInSlot = getBookingsFor(day, roomId, slotId);
                             const isBooked = bookingsInSlot.length > 0;
@@ -776,6 +1084,13 @@
                 calendarEl.querySelectorAll('th[data-date]').forEach(header => {
                     header.addEventListener('click', () => {
                         showDayView(header.dataset.date);
+                    });
+                });
+
+                // 週表示の日付列セルクリックで日表示に遷移
+                calendarEl.querySelectorAll('td[data-date]').forEach(cell => {
+                    cell.addEventListener('click', () => {
+                        showDayView(cell.dataset.date);
                     });
                 });
             }

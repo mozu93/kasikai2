@@ -1,199 +1,186 @@
 @echo off
-chcp 65001 >nul 2>&1
 setlocal enabledelayedexpansion
 
 REM ===================================
-REM   🚀 会議室予約システム 簡単導入 🚀
+REM   Meeting Room System Easy Setup
 REM ===================================
 
 echo.
-echo ╔══════════════════════════════════════════╗
-echo ║        🚀 会議室予約システム 簡単導入        ║
-echo ║                                          ║
-echo ║  このファイルをダブルクリックするだけで      ║
-echo ║  すべての設定が完了します！                  ║
-echo ╚══════════════════════════════════════════╝
+echo ============================================
+echo        Meeting Room System Easy Setup
+echo.
+echo  Double-click this file to complete
+echo  all setup automatically!
+echo ============================================
 echo.
 
-REM 管理者権限チェック（オプション）
-echo 📋 ステップ1: 環境チェック中...
-
-REM Pythonの確認
-echo    ⏳ Python インストール確認中...
+REM Check Python
+echo Step 1: Checking environment...
+echo    Checking Python installation...
 python --version >nul 2>&1
 if errorlevel 1 (
     echo.
-    echo ❌ Python がインストールされていません。
+    echo ERROR: Python is not installed.
     echo.
-    echo 📥 Python を自動インストールしますか？
-    echo    [1] はい - Python 3.11 を自動インストール
-    echo    [2] いいえ - 手動でインストールする
-    echo    [3] 終了
+    echo Do you want to install Python automatically?
+    echo    [1] Yes - Auto install Python 3.11
+    echo    [2] No - Manual installation
+    echo    [3] Exit
     echo.
-    choice /c 123 /n /m "数字を選択してください (1,2,3): "
+    choice /c 123 /n /m "Please select (1,2,3): "
 
     if !errorlevel!==1 (
         echo.
-        echo 🔽 Python 3.11 をダウンロードしています...
-        call :download_python
-        if errorlevel 1 (
-            echo ❌ Python のダウンロードに失敗しました。
-            echo 💡 手動で https://python.org からダウンロードしてください。
-            pause
-            exit /b 1
-        )
+        echo Opening Python download page...
+        start "" "https://python.org/downloads/"
+        echo Please install Python and run this file again.
+        pause
+        exit /b 1
     ) else if !errorlevel!==2 (
         echo.
-        echo 💡 以下の手順で Python をインストールしてください：
-        echo    1. https://python.org にアクセス
-        echo    2. Python 3.11 以上をダウンロード
-        echo    3. インストール時に「Add Python to PATH」をチェック
-        echo    4. インストール後、このファイルを再実行
+        echo Please follow these steps:
+        echo    1. Go to https://python.org
+        echo    2. Download Python 3.11 or later
+        echo    3. Check "Add Python to PATH" during install
+        echo    4. Run this file again after installation
         echo.
         start "" "https://python.org/downloads/"
         pause
         exit /b 1
     ) else (
-        echo キャンセルされました。
+        echo Cancelled.
         pause
         exit /b 0
     )
 ) else (
-    echo    ✅ Python インストール済み
+    echo    OK: Python installed
 )
 
-REM ライブラリインストール
+REM Install libraries
 echo.
-echo 📋 ステップ2: 必要なライブラリをインストール中...
-echo    ⏳ インストール実行中...
+echo Step 2: Installing required libraries...
+echo    Installing packages...
 
 python -m pip install --upgrade pip >nul 2>&1
 if exist requirements.txt (
     python -m pip install -r requirements.txt >nul 2>&1
     if !errorlevel!==0 (
-        echo    ✅ ライブラリインストール完了
+        echo    OK: Libraries installed
     ) else (
-        echo    ⚠️  一部ライブラリのインストールに失敗
-        echo       ネットワーク接続を確認してください
+        echo    WARNING: Some libraries failed to install
+        echo       Please check your network connection
     )
 ) else (
-    echo    ⚠️  requirements.txt が見つかりません
+    echo    WARNING: requirements.txt not found
 )
 
-REM フォルダ作成
+REM Create folders
 echo.
-echo 📋 ステップ3: 必要なフォルダを作成中...
+echo Step 3: Creating required folders...
 if not exist "data" (
     mkdir "data"
-    echo    ✅ data フォルダ作成完了
+    echo    OK: data folder created
 ) else (
-    echo    ✅ data フォルダ確認済み
+    echo    OK: data folder exists
 )
 
 if not exist "uploads" (
     mkdir "uploads"
-    echo    ✅ uploads フォルダ作成完了
+    echo    OK: uploads folder created
 ) else (
-    echo    ✅ uploads フォルダ確認済み
+    echo    OK: uploads folder exists
 )
 
 if not exist "processed" (
     mkdir "processed"
-    echo    ✅ processed フォルダ作成完了
+    echo    OK: processed folder created
 ) else (
-    echo    ✅ processed フォルダ確認済み
+    echo    OK: processed folder exists
 )
 
-REM 設定ファイル確認
+REM Check config file
 echo.
-echo 📋 ステップ4: 設定ファイルの確認中...
+echo Step 4: Checking configuration...
 if not exist "config.json" (
     if exist "config_distribution.json" (
         copy "config_distribution.json" "config.json" >nul
-        echo    ✅ 初期設定ファイル作成完了
+        echo    OK: Initial config created
     ) else (
-        echo    ⚠️  設定ファイルが見つかりません
+        echo    WARNING: Config file not found
     )
 ) else (
-    echo    ✅ 設定ファイル確認済み
+    echo    OK: Config file exists
 )
 
-REM 初期設定の案内
+REM Setup configuration
 echo.
-echo 📋 ステップ5: 初期設定
+echo Step 5: Initial configuration
 echo.
-echo 🎯 会議室の設定を行いますか？
-echo    [1] はい - 今すぐ設定 (推奨)
-echo    [2] あとで - サンプル設定で開始
+echo Do you want to configure meeting rooms now?
+echo    [1] Yes - Configure now (Recommended)
+echo    [2] Later - Use sample settings
 echo.
-choice /c 12 /n /m "数字を選択してください (1,2): "
+choice /c 12 /n /m "Please select (1,2): "
 
 if !errorlevel!==1 (
     echo.
-    echo 🔧 設定エディターを起動します...
-    echo    ウィンドウが開いたら会議室名を設定してください
+    echo Starting configuration editor...
+    echo    Please set up meeting rooms in the window that opens
     echo.
     if exist "config_editor.pyw" (
         start "" "python" "config_editor.pyw"
-        echo    💡 設定が完了したら、このウィンドウで何かキーを押してください
+        echo    Please press any key after completing setup...
         pause >nul
     ) else (
-        echo    ⚠️  設定エディターが見つかりません
+        echo    WARNING: Configuration editor not found
     )
 ) else (
-    echo    ✅ サンプル設定で続行
+    echo    OK: Using sample configuration
 )
 
-REM サーバー起動確認
+REM Start system
 echo.
-echo 🚀 ステップ6: システムを開始しますか？
-echo    [1] はい - 今すぐ開始
-echo    [2] いいえ - 後で手動で開始
+echo Step 6: Start system now?
+echo    [1] Yes - Start now
+echo    [2] No - Start manually later
 echo.
-choice /c 12 /n /m "数字を選択してください (1,2): "
+choice /c 12 /n /m "Please select (1,2): "
 
 if !errorlevel!==1 (
     echo.
-    echo 🌟 システムを起動しています...
+    echo Starting system...
     echo.
-    echo ╔══════════════════════════════════════════╗
-    echo ║             🎉 導入完了！                 ║
-    echo ║                                          ║
-    echo ║  ブラウザが自動で開きます                  ║
-    echo ║  URL: http://localhost:5000              ║
-    echo ║                                          ║
-    echo ║  システムを停止する場合:                  ║
-    echo ║  このウィンドウで Ctrl+C を押してください  ║
-    echo ╚══════════════════════════════════════════╝
+    echo ============================================
+    echo             Setup Complete!
+    echo.
+    echo  Browser will open automatically
+    echo  URL: http://localhost:5003
+    echo.
+    echo  To stop the system:
+    echo  Press Ctrl+C in this window
+    echo ============================================
     echo.
 
-    REM ブラウザを3秒後に開く
-    start "" cmd /c "timeout /t 3 /nobreak >nul && start http://localhost:5000"
+    REM Open browser after 3 seconds
+    start "" cmd /c "timeout /t 3 /nobreak >nul && start http://localhost:5003"
 
-    REM Pythonアプリケーション起動
-    python app.py
+    REM Start Python application
+    python server_fixed.py
 
 ) else (
     echo.
-    echo ╔══════════════════════════════════════════╗
-    echo ║             ✅ 導入完了！                 ║
-    echo ║                                          ║
-    echo ║  システムを開始するには:                  ║
-    echo ║  📁 start_server.bat をダブルクリック     ║
-    echo ║                                          ║
-    echo ║  設定を変更するには:                      ║
-    echo ║  📁 run_config_editor.bat をダブルクリック ║
-    echo ╚══════════════════════════════════════════╝
+    echo ============================================
+    echo             Setup Complete!
+    echo.
+    echo  To start the system:
+    echo  Double-click: start_server.bat
+    echo.
+    echo  To change settings:
+    echo  Double-click: run_config_editor.bat
+    echo ============================================
     echo.
 )
 
-echo システムをお楽しみください！
+echo Enjoy your Meeting Room System!
 pause
 exit /b 0
-
-REM Python自動ダウンロード機能（簡易版）
-:download_python
-echo Python の自動インストール機能は準備中です。
-echo 手動でインストールしてください。
-start "" "https://python.org/downloads/"
-exit /b 1
