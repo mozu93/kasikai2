@@ -52,6 +52,14 @@
                 <div id="room-filter" class="space-y-2"></div>
             </div>
             <div>
+                <h2 class="text-lg font-bold mb-2">凡例</h2>
+                <div class="space-y-2">
+                    <div class="flex items-center"><div class="w-4 h-4 mr-2" style="background-color: #fef08a; border: 1px solid #e5e7eb;"></div><span>無料貸出</span></div>
+                    <div class="flex items-center"><div class="w-4 h-4 bg-blue-500 mr-2"></div><span>有料貸出</span></div>
+                    <div class="flex items-center"><div class="w-4 h-4 bg-gray-300 mr-2"></div><span>空き</span></div>
+                </div>
+            </div>
+            <div>
                 <h2 class="text-lg font-bold mb-2">📤 CSVアップロード</h2>
                 <div class="space-y-3 mb-6">
                     <div id="upload-container">
@@ -72,13 +80,45 @@
                     </div>
                 </div>
             </div>
-            
+
+            <!-- 管理パネル -->
             <div>
-                <h2 class="text-lg font-bold mb-2">凡例</h2>
-                <div class="space-y-2">
-                    <div class="flex items-center"><div class="w-4 h-4 mr-2" style="background-color: #fef08a; border: 1px solid #e5e7eb;"></div><span>内部予約</span></div>
-                    <div class="flex items-center"><div class="w-4 h-4 bg-blue-500 mr-2"></div><span>外部予約</span></div>
-                    <div class="flex items-center"><div class="w-4 h-4 bg-gray-300 mr-2"></div><span>空き</span></div>
+                <h2 class="text-lg font-bold mb-2">🔧 システム管理</h2>
+                <div class="space-y-3">
+                    <!-- サーバーステータス -->
+                    <div class="p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-medium">サーバーステータス</span>
+                            <span id="server-status" class="px-2 py-1 text-xs rounded bg-green-200 text-green-800">起動中</span>
+                        </div>
+                        <div id="server-info" class="text-xs text-gray-600"></div>
+                    </div>
+
+                    <!-- 設定とセットアップ -->
+                    <div class="space-y-2">
+                        <button id="open-config-btn" class="w-full px-3 py-2 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 transition-colors">
+                            ⚙️ カシカイ設定エディター
+                        </button>
+                    </div>
+
+                    <!-- ファイル情報 -->
+                    <div id="file-info" class="p-3 bg-gray-50 rounded-lg">
+                        <div class="text-sm font-medium mb-2">ファイル状況</div>
+                        <div id="file-status" class="text-xs text-gray-600 space-y-1"></div>
+                    </div>
+
+                    <!-- サーバー制御 -->
+                    <div class="space-y-2">
+                        <button id="refresh-status-btn" class="w-full px-3 py-2 bg-gray-500 text-white rounded text-sm hover:bg-gray-600 transition-colors">
+                            🔄 ステータス更新
+                        </button>
+                        <button id="stop-server-btn" class="w-full px-3 py-2 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition-colors">
+                            ⏹️ サーバー停止
+                        </button>
+                    </div>
+
+                    <!-- メッセージ表示エリア -->
+                    <div id="admin-message" class="text-sm hidden"></div>
                 </div>
             </div>
             
@@ -363,8 +403,12 @@
                     
                     // Check if this is a special booking (either internal room or zero amount)
                     const isInternalRoom = config.internal_room_ids.includes(roomConfig.id);
-                    const isSpecialAmount = booking.isSpecial === true; // from CSV processing (zero amount)
-                    const isSpecial = isInternalRoom || isSpecialAmount;
+
+                    // Check if payment amount is zero (支払額合計が0)
+                    const paymentAmount = booking['支払額合計'] || booking['合計金額(予約内容)'] || '0';
+                    const isZeroPayment = parseFloat(paymentAmount.toString().replace(/[^\d.-]/g, '')) === 0;
+
+                    const isSpecial = isInternalRoom || isZeroPayment;
                     
                     processedBookings.push({
                         id: `booking-${index}`,
@@ -384,11 +428,61 @@
                         '会員種別(予約内容)': booking['会員種別(予約内容)'] || '',
                         '部署名': booking['部署名'] || '',
                         '担当者名': booking['担当者名'] || '',
-                        '郵便番号': booking['郵便番号'] || ''
+                        '郵便番号': booking['郵便番号'] || '',
+                        '支払額合計': booking['支払額合計'] || '',
+                        '合計金額(予約内容)': booking['合計金額(予約内容)'] || ''
                     });
                 });
-                
-                return processedBookings;
+
+                // Apply data split rules
+                const finalBookings = applyDataSplitRules(processedBookings, config);
+
+                return finalBookings;
+            }
+
+            // Apply data split rules to create additional bookings for split rooms
+            function applyDataSplitRules(bookings, config) {
+                const splitRules = config.data_split_rules || [];
+                const splitBookings = [...bookings]; // Copy original bookings
+
+                splitRules.forEach(rule => {
+                    // Skip disabled rules
+                    if (!rule.enabled) return;
+
+                    // Find bookings for the source room
+                    const sourceBookings = bookings.filter(booking =>
+                        booking.roomId === rule.source_room_id
+                    );
+
+                    // Create split bookings for each target room
+                    sourceBookings.forEach(sourceBooking => {
+                        rule.target_room_ids.forEach(targetRoomId => {
+                            // Skip if target room doesn't exist in config
+                            const targetRoom = config.rooms.find(r => r.id === targetRoomId);
+                            if (!targetRoom) {
+                                console.warn(`Target room not found: ${targetRoomId}`);
+                                return;
+                            }
+
+                            // Create a copy of the booking for the target room
+                            const splitBooking = {
+                                ...sourceBooking,
+                                id: `${sourceBooking.id}-split-${targetRoomId}`,
+                                roomId: targetRoomId,
+                                // Update room name in the booking details
+                                '会議室(予約内容)': targetRoom.csv_name || targetRoom.display_name,
+                                // Mark as split booking for identification
+                                isSplitBooking: true,
+                                originalRoomId: rule.source_room_id
+                            };
+
+                            splitBookings.push(splitBooking);
+                        });
+                    });
+                });
+
+                console.log(`Applied ${splitRules.length} split rules. Original: ${bookings.length}, Final: ${splitBookings.length}`);
+                return splitBookings;
             }
 
             // --- Initialization ---
@@ -522,10 +616,11 @@
             }
 
             function renderRoomFilter() {
-                roomFilterEl.innerHTML = Object.entries(rooms).map(([id, name]) => `
+                // Only show rooms that are not hidden
+                roomFilterEl.innerHTML = filteredRooms.map(id => `
                     <label class="flex items-center ${internalRoomIds.includes(id) ? 'internal-room p-1 rounded' : ''}">
                         <input type="checkbox" value="${id}" checked class="mr-2">
-                        ${name} ${internalRoomIds.includes(id) ? '(内部用)' : ''}
+                        ${rooms[id]} ${internalRoomIds.includes(id) ? '(内部用)' : ''}
                     </label>
                 `).join('');
                 roomFilterEl.querySelectorAll('input').forEach(input => {
@@ -722,8 +817,110 @@
                 });
             }
 
-            // --- Auto-refresh --- 
+            // --- Auto-refresh ---
             setInterval(initialize, 30000); // 30秒ごとにデータを再取得
+
+            // --- 管理機能 ---
+            const serverStatusEl = document.getElementById('server-status');
+            const serverInfoEl = document.getElementById('server-info');
+            const fileStatusEl = document.getElementById('file-status');
+            const adminMessageEl = document.getElementById('admin-message');
+
+            function showAdminMessage(message, isError = false) {
+                adminMessageEl.textContent = message;
+                adminMessageEl.className = `text-sm p-2 rounded ${isError ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`;
+                adminMessageEl.classList.remove('hidden');
+                setTimeout(() => {
+                    adminMessageEl.classList.add('hidden');
+                }, 3000);
+            }
+
+            async function updateServerStatus() {
+                try {
+                    const response = await fetch('/api/status');
+                    if (response.ok) {
+                        const status = await response.json();
+                        serverStatusEl.textContent = '起動中';
+                        serverStatusEl.className = 'px-2 py-1 text-xs rounded bg-green-200 text-green-800';
+                        const uptime = Math.floor(status.uptime / 60);
+                        serverInfoEl.textContent = `稼働時間: ${uptime}分 | 最終更新: ${status.timestamp}`;
+                    } else {
+                        throw new Error('Status check failed');
+                    }
+                } catch (error) {
+                    serverStatusEl.textContent = '不明';
+                    serverStatusEl.className = 'px-2 py-1 text-xs rounded bg-yellow-200 text-yellow-800';
+                    serverInfoEl.textContent = 'ステータス取得エラー';
+                }
+            }
+
+            async function updateFileStatus() {
+                try {
+                    const response = await fetch('/api/files-info');
+                    if (response.ok) {
+                        const info = await response.json();
+                        let statusHtml = '';
+                        statusHtml += `<div>設定ファイル: ${info.config_exists ? '✅' : '❌'}</div>`;
+                        statusHtml += `<div>予約データ: ${info.bookings_csv_exists ? '✅' : '❌'}</div>`;
+                        statusHtml += `<div>未処理CSV: ${info.uploads_count}件</div>`;
+                        statusHtml += `<div>処理済: ${info.processed_count}件</div>`;
+                        fileStatusEl.innerHTML = statusHtml;
+                    }
+                } catch (error) {
+                    fileStatusEl.innerHTML = '<div>ファイル情報取得エラー</div>';
+                }
+            }
+
+            // 管理ボタンのイベントリスナー
+            document.getElementById('open-config-btn').addEventListener('click', async () => {
+                try {
+                    const response = await fetch('/api/open-config');
+                    const result = await response.json();
+                    showAdminMessage(result.message, !result.success);
+                } catch (error) {
+                    showAdminMessage('設定エディター起動エラー', true);
+                }
+            });
+
+
+            document.getElementById('refresh-status-btn').addEventListener('click', () => {
+                updateServerStatus();
+                updateFileStatus();
+                showAdminMessage('ステータスを更新しました');
+            });
+
+            document.getElementById('stop-server-btn').addEventListener('click', async () => {
+                if (confirm('サーバーを停止しますか？\n停止後は手動で再起動する必要があります。')) {
+                    try {
+                        const response = await fetch('/api/server-control', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'stop' })
+                        });
+                        const result = await response.json();
+                        showAdminMessage(result.message, !result.success);
+                        if (result.success) {
+                            setTimeout(() => {
+                                serverStatusEl.textContent = '停止中';
+                                serverStatusEl.className = 'px-2 py-1 text-xs rounded bg-red-200 text-red-800';
+                                serverInfoEl.textContent = 'サーバーが停止されました';
+                            }, 1000);
+                        }
+                    } catch (error) {
+                        showAdminMessage('サーバー停止エラー', true);
+                    }
+                }
+            });
+
+            // 初期ステータス更新
+            updateServerStatus();
+            updateFileStatus();
+
+            // 定期的なステータス更新
+            setInterval(() => {
+                updateServerStatus();
+                updateFileStatus();
+            }, 10000); // 10秒ごと
 
             initialize();
         });
