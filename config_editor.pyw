@@ -340,11 +340,10 @@ class ConfigEditorApp:
 
             messagebox.showinfo(
                 "✅ 読み込み完了",
-                f"CSVファイルから設定を読み込みました。\n"
-                f"会議室: {len(self.config.get('rooms', []))}件\n"
-                f"表示項目: {len(self.config.get('modal_fields', {}))}件\n\n"
+                f"CSVファイルから会議室情報を読み込みました。\n"
+                f"会議室: {len(self.config.get('rooms', []))}件\n\n"
                 "✨ 詳細分析: 🔍 CSV分析ボタンで詳細情報を確認できます。\n"
-                "設定を確誋して保存してください。"
+                "設定を確認して保存してください。"
             )
 
         except Exception as e:
@@ -355,10 +354,7 @@ class ConfigEditorApp:
         # 会議室情報を更新
         self.update_rooms_from_csv(df)
 
-        # ポップアップ表示項目を更新
-        self.update_modal_fields_from_csv(df)
-
-        # UIを再構築
+        # UIを再構築（ポップアップ表示項目の自動更新は削除）
         self.refresh_ui()
 
     def update_rooms_from_csv(self, df):
@@ -391,16 +387,6 @@ class ConfigEditorApp:
                         "display_name": str(room_name).strip()
                     })
 
-    def update_modal_fields_from_csv(self, df):
-        """CSVからポップアップ表示項目を更新（すべて置き換え）"""
-        # 既存の設定を完全にクリア
-        self.config['modal_fields'] = {}
-
-        # CSVのすべてのヘッダーを順番通りに追加
-        for col in df.columns:
-            if col and str(col).strip():
-                display_name = str(col).strip()
-                self.config['modal_fields'][display_name] = col
 
     def suggest_split_rules(self):
         """CSV読み込み後に分割ルールの推奨を表示"""
@@ -554,24 +540,13 @@ class ConfigEditorApp:
         for widget in self.modal_fields_container.winfo_children():
             widget.destroy()
         self.modal_field_entries = []
-        
-        # processed_bookings.csvの全カラムを取得
-        csv_headers = self.get_processed_bookings_headers()
+
+        # 設定ファイルの項目のみを表示
         existing_fields = self.config.get('modal_fields', {})
-        
-        # 既存設定がある場合はその順序で表示、その後に新しいカラムを追加
-        added_headers = set()
-        
+
         if existing_fields:
             for display_name, csv_field in existing_fields.items():
-                if csv_field in csv_headers:
-                    self.add_modal_field_entry(display_name, csv_field, enabled=True)
-                    added_headers.add(csv_field)
-        
-        # 残りのヘッダーを追加（無効化された状態で）
-        for header in csv_headers:
-            if header not in added_headers:
-                self.add_modal_field_entry(header, header, enabled=False)
+                self.add_modal_field_entry(display_name, csv_field, enabled=True)
 
     def add_modal_field_entry(self, display_name="", csv_field="", enabled=False):
         """ポップアップ表示項目エントリを追加"""
@@ -652,26 +627,8 @@ class ConfigEditorApp:
         self.update_add_field_button()
 
     def update_add_field_button(self):
-        """新規項目追加ボタンを更新"""
-        # Remove existing add button if it exists
-        if hasattr(self, 'add_field_button_frame'):
-            self.add_field_button_frame.destroy()
-        
-        # Create new add button at the end
-        self.add_field_button_frame = tk.Frame(self.modal_fields_container, bg='#f8f9fa')
-        self.add_field_button_frame.pack(fill='x', pady=10)
-        
-        add_button = tk.Button(self.add_field_button_frame, text="➕ 新しい項目を追加",
-                              font=('Yu Gothic UI', 10, 'bold'), bg='#17a2b8', fg='white',
-                              relief='flat', bd=0, cursor='hand2', padx=20, pady=8,
-                              command=lambda: self.add_modal_field_entry("", "", enabled=True))
-        add_button.pack()
-        
-        # Hover effect
-        def on_enter_add(e): add_button.config(bg='#138496')
-        def on_leave_add(e): add_button.config(bg='#17a2b8')
-        add_button.bind('<Enter>', on_enter_add)
-        add_button.bind('<Leave>', on_leave_add)
+        """新規項目追加ボタンを更新（削除済み）"""
+        pass
 
     def move_modal_field_up(self, entry_vars):
         """ポップアップ表示項目を上に移動"""
