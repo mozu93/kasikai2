@@ -96,6 +96,12 @@ class ConfigEditorApp:
                                         relief='flat', bd=0, padx=30, pady=12, cursor='hand2')
         self.load_csv_button.pack(side='left', padx=(0, 10))
 
+        # ポップアップ項目のみCSV更新ボタン
+        self.load_popup_only_button = tk.Button(button_frame, text="📋 ポップアップ項目のみCSV更新", command=self.load_csv_popup_fields_only,
+                                               font=('Yu Gothic UI', 11, 'bold'), bg='#6f42c1', fg='white',
+                                               relief='flat', bd=0, padx=25, pady=12, cursor='hand2')
+        self.load_popup_only_button.pack(side='left', padx=(0, 10))
+
         self.save_button = tk.Button(button_frame, text="💾 設定を保存", command=self.save_config,
                                     font=('Yu Gothic UI', 12, 'bold'), bg='#28a745', fg='white',
                                     relief='flat', bd=0, padx=40, pady=12, cursor='hand2')
@@ -106,6 +112,10 @@ class ConfigEditorApp:
             self.load_csv_button.config(bg='#0056b3')
         def on_leave_csv(e):
             self.load_csv_button.config(bg='#007bff')
+        def on_enter_popup(e):
+            self.load_popup_only_button.config(bg='#5a32a3')
+        def on_leave_popup(e):
+            self.load_popup_only_button.config(bg='#6f42c1')
         def on_enter_save(e):
             self.save_button.config(bg='#218838')
         def on_leave_save(e):
@@ -113,6 +123,8 @@ class ConfigEditorApp:
 
         self.load_csv_button.bind('<Enter>', on_enter_csv)
         self.load_csv_button.bind('<Leave>', on_leave_csv)
+        self.load_popup_only_button.bind('<Enter>', on_enter_popup)
+        self.load_popup_only_button.bind('<Leave>', on_leave_popup)
         self.save_button.bind('<Enter>', on_enter_save)
         self.save_button.bind('<Leave>', on_leave_save)
     
@@ -251,15 +263,37 @@ class ConfigEditorApp:
                         if room_id in self.config.get('hidden_room_ids', []):
                             self.config['hidden_room_ids'].remove(room_id)
 
-            # Save modal fields in order
-            self.config['modal_fields'] = {}
+            # Save modal fields in order - 無効化された項目も保持
+            if not hasattr(self, '_backup_modal_fields'):
+                self._backup_modal_fields = self.config.get('modal_fields', {}).copy()
+
+            # 現在有効な項目を保存
+            active_fields = {}
             for entry_vars in self.modal_field_entries:
-                if entry_vars['enabled'].get():
-                    display_name = entry_vars['display_name'].get()
-                    csv_field = entry_vars['csv_field'].get()
-                    
-                    if display_name and csv_field:
-                        self.config['modal_fields'][display_name] = csv_field
+                display_name = entry_vars['display_name'].get()
+                csv_field = entry_vars['csv_field'].get()
+                enabled = entry_vars['enabled'].get()
+
+                if display_name and csv_field:
+                    if enabled:
+                        active_fields[display_name] = csv_field
+                    # 無効化された項目も一時的に保存（再度有効化された時のため）
+                    self._backup_modal_fields[display_name] = csv_field
+
+            self.config['modal_fields'] = active_fields
+
+            # 無効化された項目を別のキーで保存
+            disabled_fields = {}
+            for entry_vars in self.modal_field_entries:
+                display_name = entry_vars['display_name'].get()
+                csv_field = entry_vars['csv_field'].get()
+                enabled = entry_vars['enabled'].get()
+
+                if display_name and csv_field and not enabled:
+                    disabled_fields[display_name] = csv_field
+
+            if disabled_fields:
+                self.config['disabled_modal_fields'] = disabled_fields
 
             # Save data split rules
             self.config['data_split_rules'] = []
@@ -358,7 +392,7 @@ class ConfigEditorApp:
         self.refresh_ui()
 
     def update_rooms_from_csv(self, df):
-        """CSVから会議室情報を更新"""
+        """CSVから会議室情報を更新（既存設定を保持）"""
         # room_nameカラムから会議室を抽出
         room_column = None
         for col in df.columns:
@@ -374,18 +408,121 @@ class ConfigEditorApp:
             # ユニークな会議室名を取得
             unique_rooms = df[room_column].dropna().unique()
 
-            # 既存の会議室設定をクリア
-            self.config['rooms'] = []
+            # 既存の会議室設定を保持
+            existing_rooms = {room['csv_name']: room for room in self.config.get('rooms', [])}
+            new_rooms = []
 
-            # 新しい会議室を追加
+            # 使用済みIDを追跡するセット
+            used_ids = set()
+
+            # CSVの各会議室について処理
             for i, room_name in enumerate(unique_rooms):
                 if room_name and str(room_name).strip():
-                    room_id = f"room-{i+1}"
-                    self.config['rooms'].append({
-                        "csv_name": str(room_name).strip(),
-                        "id": room_id,
-                        "display_name": str(room_name).strip()
-                    })
+                    room_name_clean = str(room_name).strip()
+
+                    # 既存の設定がある場合はそれを保持
+                    if room_name_clean in existing_rooms:
+                        room_data = existing_rooms[room_name_clean]
+                        new_rooms.append(room_data)
+                        used_ids.add(room_data['id'])
+                    else:
+                        # 新しい会議室にユニークなIDを割り当て
+                        room_id = f"room-{i+1}"
+                        counter = 1
+                        while room_id in used_ids:
+                            counter += 1
+                            room_id = f"room-{i+counter}"
+
+                        used_ids.add(room_id)
+
+                        new_rooms.append({
+                            "csv_name": room_name_clean,
+                            "id": room_id,
+                            "display_name": room_name_clean
+                        })
+
+            self.config['rooms'] = new_rooms
+
+    def load_csv_popup_fields_only(self):
+        """ポップアップ項目のみを更新するCSV読み込み"""
+        try:
+            file_path = filedialog.askopenfilename(
+                title="ポップアップ項目更新用CSVファイルを選択",
+                filetypes=[("CSVファイル", "*.csv"), ("すべてのファイル", "*.*")],
+                initialdir=os.getcwd()
+            )
+
+            if not file_path:
+                return
+
+            # CSVファイルを読み込む
+            self.process_csv_popup_fields_only(file_path)
+
+        except Exception as e:
+            messagebox.showerror("❌ エラー", f"CSVファイルの読み込み中にエラーが発生しました:\n{e}")
+
+    def process_csv_popup_fields_only(self, file_path):
+        """ポップアップ項目のみCSVファイルを処理"""
+        try:
+            # 複数エンコーディングでCSVを読み込み
+            encodings = ['utf-8-sig', 'utf-8', 'cp932', 'shift_jis', 'iso-2022-jp']
+            df = None
+
+            for encoding in encodings:
+                try:
+                    df = pd.read_csv(file_path, encoding=encoding)
+                    break
+                except Exception:
+                    continue
+
+            if df is None:
+                messagebox.showerror("❌ エラー", "CSVファイルを読み込めませんでした。エンコーディングを確認してください。")
+                return
+
+            # 確認ダイアログ
+            result = messagebox.askyesno(
+                "📋 ポップアップ項目更新確認",
+                f"CSVファイル: {os.path.basename(file_path)}\n"
+                f"行数: {len(df)}行\n"
+                f"列数: {len(df.columns)}列\n\n"
+                "このCSVファイルからポップアップ項目を更新しますか？\n"
+                "(会議室設定や他の設定は変更されません)"
+            )
+
+            if not result:
+                return
+
+            # ポップアップ項目のみを更新
+            self.update_popup_fields_from_csv(df)
+
+            messagebox.showinfo(
+                "✅ ポップアップ項目更新完了",
+                f"CSVヘッダーからポップアップ項目を更新しました。\n"
+                f"表示項目: {len(df.columns)}個\n\n"
+                "📋 「ポップアップ表示項目」タブで確認してください。\n"
+                "設定を確認して保存してください。"
+            )
+
+        except Exception as e:
+            messagebox.showerror("❌ エラー", f"ポップアップ項目処理中にエラーが発生しました:\n{e}")
+
+    def update_popup_fields_from_csv(self, df):
+        """CSVデータからポップアップ項目のみを更新（CSVヘッダーのみ表示）"""
+        # CSVの列名を取得
+        csv_columns = df.columns.tolist()
+
+        # CSVヘッダーにある項目のみを有効状態で設定（すべてリセット）
+        new_modal_fields = {}
+        for col in csv_columns:
+            # 表示名は列名をそのまま使用
+            new_modal_fields[col] = col
+
+        # 設定を更新（無効化された項目はクリア）
+        self.config['modal_fields'] = new_modal_fields
+        self.config['disabled_modal_fields'] = {}
+
+        # UIを再構築（ポップアップ表示項目タブのみ）
+        self.populate_modal_fields()
 
 
     def suggest_split_rules(self):
@@ -541,12 +678,21 @@ class ConfigEditorApp:
             widget.destroy()
         self.modal_field_entries = []
 
-        # 設定ファイルの項目のみを表示
+        # 有効な項目を表示
         existing_fields = self.config.get('modal_fields', {})
+        disabled_fields = self.config.get('disabled_modal_fields', {})
 
+        # 有効な項目を追加
         if existing_fields:
             for display_name, csv_field in existing_fields.items():
                 self.add_modal_field_entry(display_name, csv_field, enabled=True)
+
+        # 無効化された項目も復元（チェックボックスはオフ状態で）
+        if disabled_fields:
+            for display_name, csv_field in disabled_fields.items():
+                # 有効な項目と重複しないもののみ追加
+                if display_name not in existing_fields:
+                    self.add_modal_field_entry(display_name, csv_field, enabled=False)
 
     def add_modal_field_entry(self, display_name="", csv_field="", enabled=False):
         """ポップアップ表示項目エントリを追加"""

@@ -16,8 +16,40 @@ import sys
 import subprocess
 from datetime import datetime, timedelta
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging with rotation
+import logging.handlers
+
+# ログディレクトリを作成
+LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# ログ設定：ファイルローテーション付き
+log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s')
+
+# ファイルハンドラ（最大10MB、5ファイルまで保持）
+file_handler = logging.handlers.RotatingFileHandler(
+    os.path.join(LOG_DIR, 'meeting_room_system.log'),
+    maxBytes=10*1024*1024,  # 10MB
+    backupCount=5,
+    encoding='utf-8'
+)
+file_handler.setFormatter(log_formatter)
+file_handler.setLevel(logging.DEBUG)
+
+# コンソールハンドラ
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+console_handler.setLevel(logging.INFO)
+
+# ロガー設定
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
+
+# Flaskのログも同様に設定
+flask_logger = logging.getLogger('werkzeug')
+flask_logger.addHandler(file_handler)
 
 print("Starting Meeting Room Booking System...")
 
@@ -27,7 +59,54 @@ DATA_DIR = os.path.join(BASE_DIR, 'data')
 UPLOADS_DIR = os.path.join(BASE_DIR, 'uploads')
 BOOKINGS_CSV = os.path.join(DATA_DIR, 'processed_bookings.csv')
 
+# セキュリティ設定
+ALLOWED_EXTENSIONS = {'csv'}
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+MAX_FILES_PER_REQUEST = 10
+
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
+
+# セキュリティヘルパー関数
+def allowed_file(filename):
+    """許可されたファイル拡張子かチェック"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def validate_csv_content(file_path):
+    """CSVファイルの内容を検証"""
+    try:
+        # ファイルサイズチェック
+        file_size = os.path.getsize(file_path)
+        if file_size > MAX_FILE_SIZE:
+            logger.warning(f"File size too large: {file_size} bytes")
+            return False, "ファイルサイズが大きすぎます（最大50MB）"
+
+        # CSV形式チェック（複数エンコーディング対応）
+        encodings = ['utf-8-sig', 'utf-8', 'cp932', 'shift_jis']
+        for encoding in encodings:
+            try:
+                df = pd.read_csv(file_path, encoding=encoding, nrows=1)
+                if len(df.columns) == 0:
+                    return False, "CSVファイルに列が見つかりません"
+                logger.info(f"CSV validation passed with encoding: {encoding}")
+                return True, "OK"
+            except Exception as e:
+                continue
+
+        return False, "CSVファイルの読み込みに失敗しました"
+    except Exception as e:
+        logger.error(f"CSV validation error: {e}")
+        return False, f"ファイル検証エラー: {str(e)}"
+
+def sanitize_filename(filename):
+    """ファイル名をサニタイズ"""
+    # secure_filenameを使用し、さらに厳格化
+    filename = secure_filename(filename)
+    # 日本語ファイル名対応
+    if not filename or filename == '':
+        filename = f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    return filename
 
 # Global variables for system tray
 observer = None
@@ -38,10 +117,16 @@ def load_config():
     try:
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             config = json.load(f)
-            logging.info("Config loaded successfully")
+            logger.info("Config loaded successfully")
             return config
+    except FileNotFoundError:
+        logger.error(f"Config file not found: {CONFIG_FILE}")
+        return None
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in config file: {e}")
+        return None
     except Exception as e:
-        logging.error(f"Failed to load config: {e}")
+        logger.error(f"Failed to load config: {e}")
         return None
 
 def cleanup_old_processed_files():
@@ -297,6 +382,14 @@ def upload_files():
                 "message": "ファイルが選択されていません"
             }), 400
 
+        # ファイル数制限チェック
+        if len(files) > MAX_FILES_PER_REQUEST:
+            logger.warning(f"Too many files uploaded: {len(files)}")
+            return jsonify({
+                "success": False,
+                "message": f"ファイル数が多すぎます（最大{MAX_FILES_PER_REQUEST}ファイル）"
+            }), 400
+
         uploaded_files = []
         failed_files = []
 
@@ -305,13 +398,14 @@ def upload_files():
 
         for file in files:
             if file and file.filename:
-                # Check if file is CSV
-                if not file.filename.lower().endswith('.csv'):
-                    failed_files.append(f"{file.filename}: CSVファイルではありません")
+                # ファイル拡張子チェック
+                if not allowed_file(file.filename):
+                    failed_files.append(f"{file.filename}: CSVファイルのみ許可されています")
+                    logger.warning(f"Invalid file type attempted: {file.filename}")
                     continue
 
-                # Secure filename
-                filename = secure_filename(file.filename)
+                # ファイル名サニタイズ
+                filename = sanitize_filename(file.filename)
                 if not filename:
                     failed_files.append(f"{file.filename}: 無効なファイル名です")
                     continue
@@ -338,8 +432,17 @@ def upload_files():
                     counter += 1
 
                 file.save(file_path)
+
+                # CSVファイル内容検証
+                is_valid, validation_message = validate_csv_content(file_path)
+                if not is_valid:
+                    os.remove(file_path)  # 無効なファイルを削除
+                    failed_files.append(f"{filename}: {validation_message}")
+                    logger.warning(f"CSV validation failed for {filename}: {validation_message}")
+                    continue
+
                 uploaded_files.append(filename)
-                logging.info(f"File uploaded: {filename} ({file_size} bytes)")
+                logger.info(f"File uploaded and validated: {filename} ({file_size} bytes)")
 
         # Process uploaded files immediately
         if uploaded_files:

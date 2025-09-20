@@ -61,3 +61,6 @@ Thumbs.db
 # Misc
 新規 テキスト ドキュメント.txt
 host_app_error.log
+
+# System files that should not be committed
+nul

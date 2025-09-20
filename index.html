@@ -133,17 +133,19 @@
 
             <div class="bg-white p-4 rounded-lg shadow-md">
                 <!-- 操作パネル -->
-                <div class="flex flex-wrap items-center justify-between mb-4 gap-4">
+                <div class="mb-4">
+                    <!-- ビュー切り替えタブ（上段） -->
+                    <div class="flex items-center space-x-2 mb-3">
+                        <button id="month-view-btn" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">月</button>
+                        <button id="week-view-btn" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">週</button>
+                        <button id="day-view-btn" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">日</button>
+                    </div>
+                    <!-- 期間ナビゲーション（下段） -->
                     <div class="flex items-center space-x-2">
                         <button id="prev-btn" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">&lt;</button>
                         <h2 id="current-period" class="text-xl font-semibold"></h2>
                         <button id="next-btn" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">&gt;</button>
                         <button id="today-btn" class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">今日</button>
-                    </div>
-                    <div class="flex items-center space-x-2">
-                        <button id="month-view-btn" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">月</button>
-                        <button id="week-view-btn" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">週</button>
-                        <button id="day-view-btn" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">日</button>
                     </div>
                 </div>
 
@@ -732,57 +734,10 @@
                 }
 
                 let detailsHtml = '<dl class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-2">';
-                // modalFieldsを定義順序で処理するため配列化
-                const fieldsOrder = [
-                    ['申込NO', '申込NO'],
-                    ['利用日時(予約内容)', '利用日時(予約内容)'],
-                    ['会議室(予約内容)', '会議室(予約内容)'],
-                    ['延長(予約内容)', '延長(予約内容)'],
-                    ['備品(予約内容)', '備品(予約内容)'],
-                    ['案内表示名(予約内容)', '案内表示名(予約内容)'],
-                    ['会員種別(予約内容)', '会員種別(予約内容)'],
-                    ['事業所名', '事業所名'],
-                    ['事業所名カナ', '事業所名カナ'],
-                    ['申込日', '申込日'],
-                    ['部署名', '部署名'],
-                    ['担当者名', '担当者名'],
-                    ['電話番号', '電話番号'],
-                    ['支払額合計', '支払額合計'],
-                    ['支払種別', '支払種別'],
-                    ['入金日(予約内容)', '入金日(予約内容)'],
-                    ['合計金額(予約内容)', '合計金額(予約内容)'],
-                    ['自由設定項目5', '自由設定項目5'],
-                    ['合計料金', '合計料金'],
-                    ['支払い済み合計料金', '支払い済み合計料金'],
-                    ['未払い合計料金', '未払い合計料金'],
-                    ['会員種別', '会員種別'],
-                    ['利用目的(予約内容)', '利用目的(予約内容)'],
-                    ['会議室料金', '会議室料金'],
-                    ['延長料金', '延長料金'],
-                    ['取消日(予約内容)', '取消日(予約内容)'],
-                    ['備品料金', '備品料金'],
-                    ['冷房料金', '冷房料金'],
-                    ['暖房料金', '暖房料金'],
-                    ['調整金', '調整金'],
-                    ['キャンセル料', 'キャンセル料'],
-                    ['コンビニ種別', 'コンビニ種別'],
-                    ['クレジット種別', 'クレジット種別'],
-                    ['受付承認', '受付承認'],
-                    ['最終更新日', '最終更新日'],
-                    ['入金日', '入金日'],
-                    ['取消日', '取消日'],
-                    ['取消申請', '取消申請'],
-                    ['確定日', '確定日'],
-                    ['メモ', 'メモ'],
-                    ['顧客NO', '顧客NO'],
-                    ['メール', 'メール'],
-                    ['会員番号', '会員番号'],
-                    ['郵便番号', '郵便番号'],
-                    ['都道府県', '都道府県'],
-                    ['市区町村', '市区町村'],
-                    ['以降の住所', '以降の住所'],
-                    ['FAX番号', 'FAX番号']
-                ];
+
+                // 設定エディターで設定されたmodalFieldsを使用
+                const fieldsOrder = Object.entries(modalFields);
+
                 for (const [label, key] of fieldsOrder) {
                     let value = booking[key] || ''; // データがない場合は空文字
                     
@@ -825,59 +780,11 @@
                 }
 
                 let detailsHtml = '<dl class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-2">';
-                // modalFieldsを定義順序で処理するため配列化
-                const fieldsOrder = [
-                    ['申込NO', '申込NO'],
-                    ['利用日時(予約内容)', '利用日時(予約内容)'],
-                    ['会議室(予約内容)', '会議室(予約内容)'],
-                    ['延長(予約内容)', '延長(予約内容)'],
-                    ['備品(予約内容)', '備品(予約内容)'],
-                    ['案内表示名(予約内容)', '案内表示名(予約内容)'],
-                    ['会員種別(予約内容)', '会員種別(予約内容)'],
-                    ['事業所名', '事業所名'],
-                    ['事業所名カナ', '事業所名カナ'],
-                    ['申込日', '申込日'],
-                    ['部署名', '部署名'],
-                    ['担当者名', '担当者名'],
-                    ['電話番号', '電話番号'],
-                    ['支払額合計', '支払額合計'],
-                    ['支払種別', '支払種別'],
-                    ['入金日(予約内容)', '入金日(予約内容)'],
-                    ['合計金額(予約内容)', '合計金額(予約内容)'],
-                    ['自由設定項目5', '自由設定項目5'],
-                    ['合計料金', '合計料金'],
-                    ['支払い済み合計料金', '支払い済み合計料金'],
-                    ['未払い合計料金', '未払い合計料金'],
-                    ['会員種別', '会員種別'],
-                    ['利用目的(予約内容)', '利用目的(予約内容)'],
-                    ['会議室料金', '会議室料金'],
-                    ['延長料金', '延長料金'],
-                    ['取消日(予約内容)', '取消日(予約内容)'],
-                    ['備品料金', '備品料金'],
-                    ['冷房料金', '冷房料金'],
-                    ['暖房料金', '暖房料金'],
-                    ['調整金', '調整金'],
-                    ['キャンセル料', 'キャンセル料'],
-                    ['コンビニ種別', 'コンビニ種別'],
-                    ['クレジット種別', 'クレジット種別'],
-                    ['受付承認', '受付承認'],
-                    ['最終更新日', '最終更新日'],
-                    ['入金日', '入金日'],
-                    ['取消日', '取消日'],
-                    ['取消申請', '取消申請'],
-                    ['確定日', '確定日'],
-                    ['メモ', 'メモ'],
-                    ['顧客NO', '顧客NO'],
-                    ['メール', 'メール'],
-                    ['会員番号', '会員番号'],
-                    ['郵便番号', '郵便番号'],
-                    ['都道府県', '都道府県'],
-                    ['市区町村', '市区町村'],
-                    ['以降の住所', '以降の住所'],
-                    ['FAX番号', 'FAX番号']
-                ];
 
-                fieldsOrder.forEach(([key, displayKey]) => {
+                // 設定エディターで設定されたmodalFieldsを使用
+                const fieldsOrder = Object.entries(modalFields);
+
+                fieldsOrder.forEach(([displayKey, key]) => {
                     const value = booking[key];
                     if (value !== undefined && value !== '') {
                         detailsHtml += `

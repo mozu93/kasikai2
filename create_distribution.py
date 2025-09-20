@@ -55,7 +55,10 @@ def create_distribution():
     for file in required_files:
         if os.path.exists(file):
             shutil.copy2(file, dist_folder)
-            print(f"  [OK] {file}")
+            try:
+                print(f"  [OK] {file}")
+            except UnicodeEncodeError:
+                print(f"  [OK] {file.encode('ascii', 'replace').decode('ascii')}")
         else:
             print(f"  [!] 見つからない: {file}")
 
