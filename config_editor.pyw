@@ -91,13 +91,13 @@ class ConfigEditorApp:
         button_frame.pack(pady=20)
 
         # CSV読み込みボタン
-        self.load_csv_button = tk.Button(button_frame, text="📥 カシカイ予約一覧CSVから読み込み", command=self.load_csv_config,
-                                        font=('Yu Gothic UI', 12, 'bold'), bg='#007bff', fg='white',
-                                        relief='flat', bd=0, padx=30, pady=12, cursor='hand2')
+        self.load_csv_button = tk.Button(button_frame, text="📊 会議室項目設定のためCSV読み込み", command=self.load_csv_config,
+                                        font=('Yu Gothic UI', 11, 'bold'), bg='#4CAF50', fg='white',
+                                        relief='flat', bd=0, padx=25, pady=12, cursor='hand2')
         self.load_csv_button.pack(side='left', padx=(0, 10))
 
         # ポップアップ項目のみCSV更新ボタン
-        self.load_popup_only_button = tk.Button(button_frame, text="📋 ポップアップ項目のみCSV更新", command=self.load_csv_popup_fields_only,
+        self.load_popup_only_button = tk.Button(button_frame, text="📋 ポップアップ項目設定のためCSV読み込み", command=self.load_csv_popup_fields_only,
                                                font=('Yu Gothic UI', 11, 'bold'), bg='#6f42c1', fg='white',
                                                relief='flat', bd=0, padx=25, pady=12, cursor='hand2')
         self.load_popup_only_button.pack(side='left', padx=(0, 10))
@@ -557,6 +557,11 @@ class ConfigEditorApp:
         for widget in self.data_split_frame.winfo_children():
             widget.destroy()
         self.setup_data_split_tab()
+
+        # マウスホイールのバインドを再設定
+        self.bind_mousewheel_to_canvas(self.data_split_canvas)
+        self.bind_mousewheel_to_canvas(self.rooms_canvas)
+        self.bind_mousewheel_to_canvas(self.modal_fields_canvas)
 
         # 新しい会議室に基づいて分割ルールの推奨を表示
         self.suggest_split_rules()
