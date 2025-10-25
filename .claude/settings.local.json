@@ -7,9 +7,20 @@
       "Bash(cp:*)",
       "Bash(mv:*)",
       "Bash(git commit:*)",
-      "mcp__serena__find_symbol"
+      "mcp__serena__find_symbol",
+      "Bash(dir:*)",
+      "Bash(cscript:*)",
+      "Bash(powershell:*)",
+      "Bash(cmd:*)",
+      "mcp__serena__think_about_task_adherence",
+      "Bash(uv:*)",
+      "Bash(uvx:*)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "serena"
+  ]
 }

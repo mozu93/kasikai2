@@ -1,0 +1,71 @@
+{
+  "rooms": [
+    {
+      "csv_name": "メインホール",
+      "id": "main-hall",
+      "display_name": "メインホール"
+    },
+    {
+      "csv_name": "ホール前半",
+      "id": "hall-front",
+      "display_name": "ホール前半"
+    },
+    {
+      "csv_name": "ホール後半",
+      "id": "hall-back",
+      "display_name": "ホール後半"
+    },
+    {
+      "csv_name": "ホール全体",
+      "id": "hall-combined",
+      "display_name": "ホール全体"
+    },
+    {
+      "csv_name": "会議室A",
+      "id": "meeting-room-a",
+      "display_name": "会議室A"
+    },
+    {
+      "csv_name": "会議室B",
+      "id": "meeting-room-b",
+      "display_name": "会議室B"
+    }
+  ],
+  "internal_room_ids": [],
+  "csv_column_mapping": {
+    "booking_datetime": "利用日時(予約内容)",
+    "room_name": "会議室(予約内容)",
+    "display_name": "案内表示名(予約内容)",
+    "company_name": "事業所名",
+    "contact_person": "担当者名",
+    "total_amount": "合計金額(予約内容)",
+    "equipment": "備品(予約内容)"
+  },
+  "modal_fields": {
+    "利用日時(予約内容)": "利用日時(予約内容)",
+    "会議室(予約内容)": "会議室(予約内容)",
+    "案内表示名(予約内容)": "案内表示名(予約内容)",
+    "事業所名": "事業所名",
+    "担当者名": "担当者名",
+    "備品(予約内容)": "備品(予約内容)",
+    "延長(予約内容)": "延長(予約内容)",
+    "会員種別(予約内容)": "会員種別(予約内容)",
+    "メモ": "メモ",
+    "都道府県": "都道府県",
+    "市区町村": "市区町村"
+  },
+  "data_split_rules": [
+    {
+      "source_room_id": "hall-combined",
+      "target_room_ids": [
+        "hall-front",
+        "hall-back"
+      ],
+      "enabled": true,
+      "description": "ホール全体の予約をホール前半とホール後半にコピー"
+    }
+  ],
+  "hidden_room_ids": [
+    "hall-combined"
+  ]
+}

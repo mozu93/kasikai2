@@ -40,14 +40,19 @@ def create_distribution():
         "config.json",
 
         # セットアップ用ファイル
-        "easy_setup_gui.vbs",
+        "easy_setup_silent.vbs",
         "easy_setup.bat",
+
+        # テスト・品質チェック
+        "test_system_simple.py",
+        "code_quality_check.py",
 
         # ドキュメント
         "README.md",
         "USER_MANUAL.md",
         "QUICK_START.md",
-        "📋 超簡単！3分で完了ガイド.md"
+        "📋 超簡単！3分で完了ガイド.md",
+        "PRODUCTION_READINESS.md"
     ]
 
     # ファイルをコピー
