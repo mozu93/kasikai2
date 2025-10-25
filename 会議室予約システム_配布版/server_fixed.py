@@ -15,6 +15,7 @@ from PIL import Image, ImageDraw
 import sys
 import subprocess
 from datetime import datetime, timedelta
+import winreg  # Windows レジストリ操作
 
 # Configure logging with rotation
 import logging.handlers
@@ -618,41 +619,182 @@ def open_config_editor():
         return jsonify({'success': False, 'message': f'エラー: {str(e)}'})
 
 def show_info(icon, item):
-    """システム情報を表示"""
+    """システム情報を表示（テキスト選択可能）"""
     import threading
 
     def show_dialog():
         import tkinter as tk
-        from tkinter import messagebox
+        from tkinter import scrolledtext
 
         host_ip = get_local_ip()
-        info_text = f"""会議室予約システム
+        info_text = f"""会議室予約システム - システム情報
 
-ローカルアクセス: http://127.0.0.1:{server_port}
-ネットワークアクセス: http://{host_ip}:{server_port}
+【ローカルアクセス】
+http://127.0.0.1:{server_port}
 
-アップロードフォルダ: {UPLOADS_DIR}
-データフォルダ: {DATA_DIR}
+【ネットワークアクセス】
+http://{host_ip}:{server_port}
+
+【フォルダパス】
+アップロード: {UPLOADS_DIR}
+データ: {DATA_DIR}
+処理済み: {os.path.join(BASE_DIR, 'processed')}
+
+【システム状態】
+サーバーポート: {server_port}
+起動時刻: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+※このテキストはドラッグして選択・コピーできます
         """
 
-        # Create root window
+        # Create window
         root = tk.Tk()
-        root.withdraw()  # Hide the root window
+        root.title("システム情報")
+        root.geometry("500x350")
         root.attributes('-topmost', True)  # Keep on top
 
         try:
-            # Show info dialog
-            messagebox.showinfo("システム情報", info_text)
-        finally:
-            # Clean up
-            root.quit()
+            # Create scrolled text widget
+            text_widget = scrolledtext.ScrolledText(
+                root,
+                wrap=tk.WORD,
+                width=60,
+                height=20,
+                font=("Courier New", 10),
+                bg="white",
+                fg="black",
+                padx=10,
+                pady=10
+            )
+            text_widget.pack(fill=tk.BOTH, expand=True)
+            text_widget.insert(tk.END, info_text)
+            text_widget.config(state=tk.DISABLED)  # Read-only
+
+            # Copy button
+            button_frame = tk.Frame(root)
+            button_frame.pack(fill=tk.X, padx=10, pady=5)
+
+            def copy_to_clipboard():
+                """テキストをクリップボードにコピー"""
+                root.clipboard_clear()
+                root.clipboard_append(info_text)
+                root.update()
+                logging.info("System info copied to clipboard")
+
+            copy_button = tk.Button(button_frame, text="📋 すべてをコピー", command=copy_to_clipboard)
+            copy_button.pack(side=tk.LEFT, padx=5)
+
+            close_button = tk.Button(button_frame, text="閉じる", command=root.destroy)
+            close_button.pack(side=tk.LEFT, padx=5)
+
+            root.mainloop()
+        except Exception as e:
+            logging.error(f"Error displaying system info: {e}")
             root.destroy()
 
     # Run dialog in separate thread to avoid blocking
     thread = threading.Thread(target=show_dialog, daemon=True)
     thread.start()
 
-    logging.info("System info displayed")
+    logging.info("System info window opened")
+
+def register_autorun():
+    """Windowsレジストリに自動起動を登録"""
+    try:
+        # レジストリキーのパス
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        app_name = "KasikaiMeetingRoomSystem"
+
+        # 実行ファイルのパス
+        python_exe = sys.executable
+        script_path = os.path.abspath(__file__)
+        command = f'"{python_exe}" "{script_path}"'
+
+        # レジストリに書き込み
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_WRITE) as key:
+            winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, command)
+
+        logging.info(f"Autorun registered: {command}")
+        return True, "自動起動が有効になりました"
+    except Exception as e:
+        logging.error(f"Failed to register autorun: {e}")
+        return False, f"自動起動の登録に失敗しました: {str(e)}"
+
+def unregister_autorun():
+    """Windowsレジストリから自動起動を削除"""
+    try:
+        # レジストリキーのパス
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        app_name = "KasikaiMeetingRoomSystem"
+
+        # レジストリから削除
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_WRITE) as key:
+            try:
+                winreg.DeleteValue(key, app_name)
+                logging.info(f"Autorun unregistered: {app_name}")
+                return True, "自動起動が無効になりました"
+            except FileNotFoundError:
+                logging.info(f"Autorun entry not found: {app_name}")
+                return True, "自動起動は既に無効です"
+    except Exception as e:
+        logging.error(f"Failed to unregister autorun: {e}")
+        return False, f"自動起動の削除に失敗しました: {str(e)}"
+
+def is_autorun_enabled():
+    """自動起動が有効か確認"""
+    try:
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        app_name = "KasikaiMeetingRoomSystem"
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_READ) as key:
+            try:
+                winreg.QueryValueEx(key, app_name)
+                return True
+            except FileNotFoundError:
+                return False
+    except Exception as e:
+        logging.error(f"Failed to check autorun status: {e}")
+        return False
+
+def show_autorun_menu(icon, item):
+    """自動起動設定メニューを表示"""
+    import tkinter as tk
+    from tkinter import messagebox
+
+    def show_menu():
+        is_enabled = is_autorun_enabled()
+
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+
+        try:
+            if is_enabled:
+                # 自動起動が有効な場合
+                result = messagebox.askyesno(
+                    "自動起動の設定",
+                    "自動起動は現在【有効】です。\n\nクリックして無効にしますか？"
+                )
+                if result:
+                    success, message = unregister_autorun()
+                    messagebox.showinfo("結果", message)
+            else:
+                # 自動起動が無効な場合
+                result = messagebox.askyesno(
+                    "自動起動の設定",
+                    "自動起動は現在【無効】です。\n\nクリックして有効にしますか？"
+                )
+                if result:
+                    success, message = register_autorun()
+                    messagebox.showinfo("結果", message)
+        finally:
+            root.quit()
+            root.destroy()
+
+    thread = threading.Thread(target=show_menu, daemon=True)
+    thread.start()
+
+    logging.info("Autorun settings menu opened")
 
 def open_config_editor_tray(icon, item):
     """タスクトレイから設定エディタを開く"""
@@ -699,6 +841,7 @@ def setup_system_tray():
             pystray.MenuItem("設定エディタ", open_config_editor_tray),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("システム情報", show_info),
+            pystray.MenuItem("自動起動の設定", show_autorun_menu),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("終了", quit_application)
         )
