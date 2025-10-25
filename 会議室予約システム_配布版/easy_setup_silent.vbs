@@ -6,42 +6,42 @@ Set objFSO = CreateObject("Scripting.FileSystemObject")
 currentPath = objFSO.GetParentFolderName(WScript.ScriptFullName)
 
 Dim result
-result = MsgBox("ä¼šè­°å®¤äºˆç´„ã‚·ã‚¹ãƒ†ãƒ  ã‚»ãƒƒãƒˆã‚¢ãƒƒãƒ—" & vbCrLf & vbCrLf & "ãƒ•ã‚©ãƒ«ãƒ€: " & currentPath & vbCrLf & vbCrLf & "ã‚»ãƒƒãƒˆã‚¢ãƒƒãƒ—ã‚’ç¶šã‘ã¾ã™ã‹ï¼Ÿ", vbYesNo + vbQuestion, "ã‚»ãƒƒãƒˆã‚¢ãƒƒãƒ—")
+result = MsgBox("‰ï‹cŽº—\–ñƒVƒXƒeƒ€ ƒZƒbƒgƒAƒbƒv" & vbCrLf & vbCrLf & "ƒtƒHƒ‹ƒ_: " & currentPath & vbCrLf & vbCrLf & "ƒZƒbƒgƒAƒbƒv‚ð‘±‚¯‚Ü‚·‚©H", vbYesNo + vbQuestion, "ƒZƒbƒgƒAƒbƒv")
 
 If result = vbNo Then
     WScript.Quit
 End If
 
 If Not CheckPython() Then
-    result = MsgBox("ã“ã®ã‚·ã‚¹ãƒ†ãƒ ã«PythonãŒã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ã•ã‚Œã¦ã„ã¾ã›ã‚“ã€‚" & vbCrLf & vbCrLf & "Pythonãƒ€ã‚¦ãƒ³ãƒ­ãƒ¼ãƒ‰ãƒšãƒ¼ã‚¸ã‚’é–‹ãã¾ã™ã‹ï¼Ÿ", vbYesNo + vbExclamation, "PythonãŒå¿…è¦ã§ã™")
+    result = MsgBox("‚±‚ÌƒVƒXƒeƒ€‚ÉPython‚ªƒCƒ“ƒXƒg[ƒ‹‚³‚ê‚Ä‚¢‚Ü‚¹‚ñB" & vbCrLf & vbCrLf & "Pythonƒ_ƒEƒ“ƒ[ƒhƒy[ƒW‚ðŠJ‚«‚Ü‚·‚©H", vbYesNo + vbExclamation, "Python‚ª•K—v‚Å‚·")
     If result = vbYes Then
         objShell.Run "https://www.python.org/downloads/", 1, False
     End If
-    MsgBox "Pythonã‚’ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ã—ã¦ã‹ã‚‰ã€ã“ã®ã‚»ãƒƒãƒˆã‚¢ãƒƒãƒ—ã‚’å†åº¦å®Ÿè¡Œã—ã¦ãã ã•ã„ã€‚", vbInformation, "ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«å¿…é ˆ"
+    MsgBox "Python‚ðƒCƒ“ƒXƒg[ƒ‹‚µ‚Ä‚©‚çA‚±‚ÌƒZƒbƒgƒAƒbƒv‚ðÄ“xŽÀs‚µ‚Ä‚­‚¾‚³‚¢B", vbInformation, "ƒCƒ“ƒXƒg[ƒ‹•K{"
     WScript.Quit
 End If
 
 If CheckLibrariesImport() Then
-    MsgBox "å¿…è¦ãªãƒ©ã‚¤ãƒ–ãƒ©ãƒªã¯ã™ã¹ã¦ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«æ¸ˆã¿ã§ã€æ­£å¸¸ã«å‹•ä½œã—ã¦ã„ã¾ã™ï¼" & vbCrLf & vbCrLf & "ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ã¯ä¸è¦ã§ã™ã€‚", vbInformation, "ãƒ©ã‚¤ãƒ–ãƒ©ãƒªOK"
+    MsgBox "•K—v‚Èƒ‰ƒCƒuƒ‰ƒŠ‚Í‚·‚×‚ÄƒCƒ“ƒXƒg[ƒ‹Ï‚Ý‚ÅA³í‚É“®ì‚µ‚Ä‚¢‚Ü‚·I" & vbCrLf & vbCrLf & "ƒCƒ“ƒXƒg[ƒ‹‚Í•s—v‚Å‚·B", vbInformation, "ƒ‰ƒCƒuƒ‰ƒŠOK"
 Else
-    MsgBox "å¿…è¦ãªãƒ©ã‚¤ãƒ–ãƒ©ãƒªã‚’ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ä¸­ã§ã™..." & vbCrLf & vbCrLf & "æ•°ç§’ã‹ã‹ã‚‹å ´åˆãŒã‚ã‚Šã¾ã™ã€‚", vbInformation, "ãƒ©ã‚¤ãƒ–ãƒ©ãƒªã‚’ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ä¸­"
+    MsgBox "•K—v‚Èƒ‰ƒCƒuƒ‰ƒŠ‚ðƒCƒ“ƒXƒg[ƒ‹’†‚Å‚·..." & vbCrLf & vbCrLf & "”•b‚©‚©‚éê‡‚ª‚ ‚è‚Ü‚·B", vbInformation, "ƒ‰ƒCƒuƒ‰ƒŠ‚ðƒCƒ“ƒXƒg[ƒ‹’†"
     If Not InstallLibraries() Then
-        MsgBox "è‡ªå‹•ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ã«å¤±æ•—ã—ã¾ã—ãŸã€‚" & vbCrLf & vbCrLf & "æ¬¡ã®ã‚³ãƒžãƒ³ãƒ‰ã‚’æ‰‹å‹•ã§å®Ÿè¡Œã—ã¦ãã ã•ã„:" & vbCrLf & "pip install flask pandas watchdog pystray Pillow", vbExclamation, "æ‰‹å‹•ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ãŒå¿…è¦ã§ã™"
+        MsgBox "Ž©“®ƒCƒ“ƒXƒg[ƒ‹‚ÉŽ¸”s‚µ‚Ü‚µ‚½B" & vbCrLf & vbCrLf & "ŽŸ‚ÌƒRƒ}ƒ“ƒh‚ðŽè“®‚ÅŽÀs‚µ‚Ä‚­‚¾‚³‚¢:" & vbCrLf & "pip install flask pandas watchdog pystray Pillow", vbExclamation, "Žè“®ƒCƒ“ƒXƒg[ƒ‹‚ª•K—v‚Å‚·"
         WScript.Quit
     End If
-    MsgBox "ãƒ©ã‚¤ãƒ–ãƒ©ãƒªã®ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ãŒå®Œäº†ã—ã¾ã—ãŸï¼", vbInformation, "ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«å®Œäº†"
+    MsgBox "ƒ‰ƒCƒuƒ‰ƒŠ‚ÌƒCƒ“ƒXƒg[ƒ‹‚ªŠ®—¹‚µ‚Ü‚µ‚½I", vbInformation, "ƒCƒ“ƒXƒg[ƒ‹Š®—¹"
 End If
 
 CreateFolders
 SetupConfig
 CreateSampleDataEnglish
 
-result = MsgBox("ã‚»ãƒƒãƒˆã‚¢ãƒƒãƒ—ãŒæ­£å¸¸ã«å®Œäº†ã—ã¾ã—ãŸï¼" & vbCrLf & vbCrLf & "ä¼šè­°å®¤äºˆç´„ã‚·ã‚¹ãƒ†ãƒ ã‚’ä»Šã™ãèµ·å‹•ã—ã¾ã™ã‹ï¼Ÿ", vbYesNo + vbQuestion, "é–‹å§‹æº–å‚™å®Œäº†")
+result = MsgBox("ƒZƒbƒgƒAƒbƒv‚ª³í‚ÉŠ®—¹‚µ‚Ü‚µ‚½I" & vbCrLf & vbCrLf & "‰ï‹cŽº—\–ñƒVƒXƒeƒ€‚ð¡‚·‚®‹N“®‚µ‚Ü‚·‚©H", vbYesNo + vbQuestion, "ŠJŽn€”õŠ®—¹")
 
 If result = vbYes Then
     StartServer
 Else
-    MsgBox "ã‚»ãƒƒãƒˆã‚¢ãƒƒãƒ—ãŒå®Œäº†ã—ã¾ã—ãŸã€‚" & vbCrLf & vbCrLf & "æ‰‹å‹•ã§èµ·å‹•ã™ã‚‹ã«ã¯:" & vbCrLf & "  python server_fixed.py" & vbCrLf & vbCrLf & "ãã®å¾Œã€ãƒ–ãƒ©ã‚¦ã‚¶ã§é–‹ã„ã¦ãã ã•ã„: http://localhost:5000", vbInformation, "æ‰‹å‹•èµ·å‹•"
+    MsgBox "ƒZƒbƒgƒAƒbƒv‚ªŠ®—¹‚µ‚Ü‚µ‚½B" & vbCrLf & vbCrLf & "Žè“®‚Å‹N“®‚·‚é‚É‚Í:" & vbCrLf & "  python server_fixed.py" & vbCrLf & vbCrLf & "‚»‚ÌŒãAƒuƒ‰ƒEƒU‚ÅŠJ‚¢‚Ä‚­‚¾‚³‚¢: http://localhost:5000", vbInformation, "Žè“®‹N“®"
 End If
 
 Function CheckPython()
@@ -123,7 +123,7 @@ End Sub
 Sub StartServer()
     Dim startCmd, browserCmd
 
-    MsgBox "ã‚µãƒ¼ãƒãƒ¼ã‚’èµ·å‹•ä¸­ã§ã™..." & vbCrLf & vbCrLf & "3ç§’å¾Œã«ãƒ–ãƒ©ã‚¦ã‚¶ãŒè‡ªå‹•ã§é–‹ãã¾ã™ã€‚" & vbCrLf & "ã‚µãƒ¼ãƒãƒ¼ã¯ã‚·ã‚¹ãƒ†ãƒ ãƒˆãƒ¬ã‚¤ã«æœ€å°åŒ–ã•ã‚Œã¾ã™ã€‚", vbInformation, "ã‚µãƒ¼ãƒãƒ¼èµ·å‹•ä¸­"
+    MsgBox "ƒT[ƒo[‚ð‹N“®’†‚Å‚·..." & vbCrLf & vbCrLf & "3•bŒã‚Éƒuƒ‰ƒEƒU‚ªŽ©“®‚ÅŠJ‚«‚Ü‚·B" & vbCrLf & "ƒT[ƒo[‚ÍƒVƒXƒeƒ€ƒgƒŒƒC‚ÉÅ¬‰»‚³‚ê‚Ü‚·B", vbInformation, "ƒT[ƒo[‹N“®’†"
 
     browserCmd = "cmd /c ""timeout /t 3 /nobreak > nul && start http://localhost:5000"""
     objShell.Run browserCmd, 0, False
