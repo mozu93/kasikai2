@@ -53,6 +53,7 @@ credentials.json
 
 # Generated files
 bookings.csv
+data/processed_bookings.csv
 
 # OS generated files
 .DS_Store
