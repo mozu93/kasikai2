@@ -16,8 +16,8 @@
 
 ### システムの起動
 
-**推奨方法: easy_setup_gui.vbs**
-1. **`easy_setup_gui.vbs`** をダブルクリック
+**推奨方法: easy_setup_silent.vbs**
+1. **`easy_setup_silent.vbs`** をダブルクリック
 2. GUIダイアログに従ってセットアップ完了
 3. 自動的にシステム起動・ブラウザオープン
 
@@ -421,7 +421,7 @@ A: システムが自動的に対応します：
 
 1. **VBSセットアップで再起動**:
    ```
-   easy_setup_gui.vbs をダブルクリック
+   easy_setup_silent.vbs をダブルクリック
    ```
 
 2. **コマンドプロンプトで手動起動**:

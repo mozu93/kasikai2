@@ -11,14 +11,14 @@
 
 ## システム構成
 
-1. **`easy_setup_gui.vbs`**: 初回セットアップ用GUIツール。ダブルクリックするだけで環境構築が完了します。
+1. **`easy_setup_silent.vbs`**: 初回セットアップ用ツール。ダブルクリックするだけで環境構築が完了します。
 2. **`server_fixed.py`**: メインアプリケーション。システムトレイ常駐型のWebサーバーです。
 3. **`config_editor.pyw`**: GUIベースの設定エディター。会議室名や表示項目を直感的に設定できます。
 
 ## 主な機能
 
 ### 🎯 **ワンクリックセットアップ**
-- `easy_setup_gui.vbs` でPython環境チェック、ライブラリインストール、設定まで全自動
+- `easy_setup_silent.vbs` でPython環境チェック、ライブラリインストール、設定まで全自動
 - GUIダイアログでユーザーフレンドリーなセットアップ体験
 
 ### 🖥️ **システムトレイ統合**
@@ -59,7 +59,7 @@
 ### 🚀 **新導入フロー（4ステップ）**
 
 #### ステップ1: 📁 基本インストール
-1. **`easy_setup_gui.vbs` をダブルクリック**
+1. **`easy_setup_silent.vbs` をダブルクリック**
    - Python環境チェック（未インストールの場合は自動案内）
    - 必要ライブラリの自動インストール
    - **サンプルデータでシステム自動起動**
@@ -98,7 +98,7 @@ python server_fixed.py
 ### 1. **アプリケーションの起動**
 
 **方法1: VBSセットアップから**
-- `easy_setup_gui.vbs` をダブルクリック → セットアップ完了後に自動起動
+- `easy_setup_silent.vbs` をダブルクリック → セットアップ完了後に自動起動
 
 **方法2: 直接起動**
 - `python server_fixed.py` を実行
@@ -188,7 +188,7 @@ Windows Defender ファイアウォール:
 
 ## トラブルシューティング
 
-- **Python未インストール**: `easy_setup_gui.vbs` が自動で案内
+- **Python未インストール**: `easy_setup_silent.vbs` が自動で案内
 - **ライブラリエラー**: `pip install -r requirements.txt` を実行
 - **ポート競合**: システムが自動的に次のポート(5001〜5009)を試行します
 - **CSV読み込みエラー**: エンコーディングの問題。ファイルをUTF-8で保存
@@ -198,7 +198,7 @@ Windows Defender ファイアウォール:
 
 ```
 kasikai2/
-├── easy_setup_gui.vbs      # GUIセットアップ
+├── easy_setup_silent.vbs   # セットアップツール
 ├── server_fixed.py         # メインアプリケーション
 ├── config_editor.pyw       # 設定エディター
 ├── index.html             # Webインターフェース

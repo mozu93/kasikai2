@@ -6,42 +6,42 @@ Set objFSO = CreateObject("Scripting.FileSystemObject")
 currentPath = objFSO.GetParentFolderName(WScript.ScriptFullName)
 
 Dim result
-result = MsgBox("Meeting Room Booking System Setup" & vbCrLf & vbCrLf & "Current folder: " & currentPath & vbCrLf & vbCrLf & "Continue setup?", vbYesNo + vbQuestion, "Setup")
+result = MsgBox("会議室予約システム セットアップ" & vbCrLf & vbCrLf & "フォルダ: " & currentPath & vbCrLf & vbCrLf & "セットアップを続けますか？", vbYesNo + vbQuestion, "セットアップ")
 
 If result = vbNo Then
     WScript.Quit
 End If
 
 If Not CheckPython() Then
-    result = MsgBox("Python not found on this system." & vbCrLf & vbCrLf & "Open Python download page?", vbYesNo + vbExclamation, "Python Required")
+    result = MsgBox("このシステムにPythonがインストールされていません。" & vbCrLf & vbCrLf & "Pythonダウンロードページを開きますか？", vbYesNo + vbExclamation, "Pythonが必要です")
     If result = vbYes Then
         objShell.Run "https://www.python.org/downloads/", 1, False
     End If
-    MsgBox "Please install Python and run this setup again.", vbInformation, "Installation Required"
+    MsgBox "Pythonをインストールしてから、このセットアップを再度実行してください。", vbInformation, "インストール必須"
     WScript.Quit
 End If
 
 If CheckLibrariesImport() Then
-    MsgBox "All required libraries are already installed and working!" & vbCrLf & vbCrLf & "No installation needed.", vbInformation, "Libraries OK"
+    MsgBox "必要なライブラリはすべてインストール済みで、正常に動作しています！" & vbCrLf & vbCrLf & "インストールは不要です。", vbInformation, "ライブラリOK"
 Else
-    MsgBox "Installing required libraries..." & vbCrLf & vbCrLf & "This may take a few moments.", vbInformation, "Installing Libraries"
+    MsgBox "必要なライブラリをインストール中です..." & vbCrLf & vbCrLf & "数秒かかる場合があります。", vbInformation, "ライブラリをインストール中"
     If Not InstallLibraries() Then
-        MsgBox "Automatic installation failed." & vbCrLf & vbCrLf & "Please run this command manually:" & vbCrLf & "pip install flask pandas watchdog pystray Pillow", vbExclamation, "Manual Installation Required"
+        MsgBox "自動インストールに失敗しました。" & vbCrLf & vbCrLf & "次のコマンドを手動で実行してください:" & vbCrLf & "pip install flask pandas watchdog pystray Pillow", vbExclamation, "手動インストールが必要です"
         WScript.Quit
     End If
-    MsgBox "Libraries installed successfully!", vbInformation, "Installation Complete"
+    MsgBox "ライブラリのインストールが完了しました！", vbInformation, "インストール完了"
 End If
 
 CreateFolders
 SetupConfig
 CreateSampleDataEnglish
 
-result = MsgBox("Setup completed successfully!" & vbCrLf & vbCrLf & "Start the Meeting Room System now?", vbYesNo + vbQuestion, "Ready to Start")
+result = MsgBox("セットアップが正常に完了しました！" & vbCrLf & vbCrLf & "会議室予約システムを今すぐ起動しますか？", vbYesNo + vbQuestion, "開始準備完了")
 
 If result = vbYes Then
     StartServer
 Else
-    MsgBox "Setup complete." & vbCrLf & vbCrLf & "To start manually:" & vbCrLf & "  python server_fixed.py" & vbCrLf & vbCrLf & "Then open: http://localhost:5000", vbInformation, "Manual Start"
+    MsgBox "セットアップが完了しました。" & vbCrLf & vbCrLf & "手動で起動するには:" & vbCrLf & "  python server_fixed.py" & vbCrLf & vbCrLf & "その後、ブラウザで開いてください: http://localhost:5000", vbInformation, "手動起動"
 End If
 
 Function CheckPython()
@@ -123,7 +123,7 @@ End Sub
 Sub StartServer()
     Dim startCmd, browserCmd
 
-    MsgBox "Starting server..." & vbCrLf & vbCrLf & "Browser will open automatically in 3 seconds." & vbCrLf & "Server window will be minimized to system tray.", vbInformation, "Starting Server"
+    MsgBox "サーバーを起動中です..." & vbCrLf & vbCrLf & "3秒後にブラウザが自動で開きます。" & vbCrLf & "サーバーはシステムトレイに最小化されます。", vbInformation, "サーバー起動中"
 
     browserCmd = "cmd /c ""timeout /t 3 /nobreak > nul && start http://localhost:5000"""
     objShell.Run browserCmd, 0, False
