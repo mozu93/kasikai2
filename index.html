@@ -569,7 +569,19 @@
                         return acc;
                     }, {});
                     internalRoomIds = config.internal_room_ids || [];
-                    modalFields = config.modal_fields || {};
+                    // ✨ 順序付きリスト形式を優先的に使用（新形式）
+                    // フォールバック：従来の辞書形式を使用
+                    if (config.modal_fields_list && Array.isArray(config.modal_fields_list)) {
+                        // 新形式：リスト形式で順序を保持
+                        modalFields = config.modal_fields_list;
+                    } else {
+                        // フォールバック：辞書形式を互換形式に変換
+                        const fieldsDict = config.modal_fields || {};
+                        modalFields = Object.entries(fieldsDict).map(([display_name, csv_field]) => ({
+                            display_name,
+                            csv_field
+                        }));
+                    }
                     
                     // Filter out hidden rooms from display
                     const hiddenRoomIds = config.hidden_room_ids || [];
@@ -735,10 +747,14 @@
 
                 let detailsHtml = '<dl class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-2">';
 
-                // 設定エディターで設定されたmodalFieldsを使用
-                const fieldsOrder = Object.entries(modalFields);
+                // ✨ 設定エディターで設定されたmodalFieldsを使用（順序付き）
+                const fieldsOrder = Array.isArray(modalFields)
+                    ? modalFields
+                    : Object.entries(modalFields).map(([label, key]) => ({ display_name: label, csv_field: key }));
 
-                for (const [label, key] of fieldsOrder) {
+                for (const fieldItem of fieldsOrder) {
+                    const label = fieldItem.display_name;
+                    const key = fieldItem.csv_field;
                     let value = booking[key] || ''; // データがない場合は空文字
                     
                     if (label === '利用日時' && booking.date) {
@@ -781,10 +797,14 @@
 
                 let detailsHtml = '<dl class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-2">';
 
-                // 設定エディターで設定されたmodalFieldsを使用
-                const fieldsOrder = Object.entries(modalFields);
+                // ✨ 設定エディターで設定されたmodalFieldsを使用（順序付き）
+                const fieldsOrder = Array.isArray(modalFields)
+                    ? modalFields
+                    : Object.entries(modalFields).map(([label, key]) => ({ display_name: label, csv_field: key }));
 
-                for (const [label, key] of fieldsOrder) {
+                for (const fieldItem of fieldsOrder) {
+                    const label = fieldItem.display_name;
+                    const key = fieldItem.csv_field;
                     let value = booking[key] || ''; // データがない場合は空文字
                     
                     if (label === '利用日時' && booking.date) {

@@ -219,6 +219,17 @@ class ConfigEditorApp:
                 {"csv_name": "大会議室", "id": "large-room", "display_name": "大会議室"},
                 {"csv_name": "役員会議室", "id": "executive-room", "display_name": "役員会議室"}
             ],
+            # ✨ 順序付きリスト形式（新形式）
+            "modal_fields_list": [
+                {"display_name": "利用日時", "csv_field": "booking_datetime"},
+                {"display_name": "会議室", "csv_field": "room_name"},
+                {"display_name": "案内表示名", "csv_field": "display_name"},
+                {"display_name": "事業所名", "csv_field": "company_name"},
+                {"display_name": "担当者名", "csv_field": "contact_person"},
+                {"display_name": "延長", "csv_field": "extension"},
+                {"display_name": "備品", "csv_field": "equipment"}
+            ],
+            # 後方互換性のため、従来の辞書形式も保持
             "modal_fields": {
                 "利用日時": "booking_datetime",
                 "会議室": "room_name",
@@ -246,7 +257,7 @@ class ConfigEditorApp:
             for i, entry_vars in enumerate(self.room_entries):
                 csv_name = entry_vars['csv_name'].get()
                 display_name = entry_vars['display_name'].get()
-                
+
                 if csv_name and display_name:
                     room_id = entry_vars['id'].get() if entry_vars['id'].get() else f"room-{i+1}"
                     self.config['rooms'].append({
@@ -254,7 +265,7 @@ class ConfigEditorApp:
                         "id": room_id,
                         "display_name": display_name
                     })
-                    
+
                     is_hidden = entry_vars['is_hidden'].get()
                     if is_hidden:
                         if room_id not in self.config.setdefault('hidden_room_ids', []):
@@ -263,12 +274,11 @@ class ConfigEditorApp:
                         if room_id in self.config.get('hidden_room_ids', []):
                             self.config['hidden_room_ids'].remove(room_id)
 
-            # Save modal fields in order - 無効化された項目も保持
-            if not hasattr(self, '_backup_modal_fields'):
-                self._backup_modal_fields = self.config.get('modal_fields', {}).copy()
+            # ✨ Save modal fields in order - UI上の順番を正確に保存
+            # modal_fields_listとして順序付きリストで保存
+            modal_fields_list = []
+            disabled_fields = {}
 
-            # 現在有効な項目を保存
-            active_fields = {}
             for entry_vars in self.modal_field_entries:
                 display_name = entry_vars['display_name'].get()
                 csv_field = entry_vars['csv_field'].get()
@@ -276,21 +286,19 @@ class ConfigEditorApp:
 
                 if display_name and csv_field:
                     if enabled:
-                        active_fields[display_name] = csv_field
-                    # 無効化された項目も一時的に保存（再度有効化された時のため）
-                    self._backup_modal_fields[display_name] = csv_field
+                        # 有効な項目は順序付きリストに追加
+                        modal_fields_list.append({
+                            "display_name": display_name,
+                            "csv_field": csv_field
+                        })
+                    else:
+                        # 無効化された項目は別途保存
+                        disabled_fields[display_name] = csv_field
 
-            self.config['modal_fields'] = active_fields
-
-            # 無効化された項目を別のキーで保存
-            disabled_fields = {}
-            for entry_vars in self.modal_field_entries:
-                display_name = entry_vars['display_name'].get()
-                csv_field = entry_vars['csv_field'].get()
-                enabled = entry_vars['enabled'].get()
-
-                if display_name and csv_field and not enabled:
-                    disabled_fields[display_name] = csv_field
+            # 順序を保持するため、configに両方の形式で保存
+            # 後方互換性のため従来の辞書形式も保持
+            self.config['modal_fields_list'] = modal_fields_list
+            self.config['modal_fields'] = {item['display_name']: item['csv_field'] for item in modal_fields_list}
 
             if disabled_fields:
                 self.config['disabled_modal_fields'] = disabled_fields
@@ -507,18 +515,49 @@ class ConfigEditorApp:
             messagebox.showerror("❌ エラー", f"ポップアップ項目処理中にエラーが発生しました:\n{e}")
 
     def update_popup_fields_from_csv(self, df):
-        """CSVデータからポップアップ項目のみを更新（CSVヘッダーのみ表示）"""
+        """CSVデータからポップアップ項目のみを更新（既存の順番を保護）"""
         # CSVの列名を取得
         csv_columns = df.columns.tolist()
 
-        # CSVヘッダーにある項目のみを有効状態で設定（すべてリセット）
-        new_modal_fields = {}
-        for col in csv_columns:
-            # 表示名は列名をそのまま使用
-            new_modal_fields[col] = col
+        # ✨ 既存の順番付きリストを保護
+        existing_modal_fields_list = self.config.get('modal_fields_list', [])
+        existing_modal_fields_dict = self.config.get('modal_fields', {})
 
-        # 設定を更新（無効化された項目はクリア）
-        self.config['modal_fields'] = new_modal_fields
+        # CSVのカラムに対応する既存項目を順番を保持したまま更新
+        new_modal_fields_list = []
+
+        # 既存の有効項目から、CSVに存在するものを優先順で追加
+        for field_item in existing_modal_fields_list:
+            display_name = field_item.get('display_name', '')
+            csv_field = field_item.get('csv_field', '')
+            # CSVのカラムに存在するかチェック
+            if csv_field in csv_columns or display_name in csv_columns:
+                # カラム名で統一（CSVの実際のカラム名を使用）
+                actual_csv_field = csv_field if csv_field in csv_columns else display_name
+                new_modal_fields_list.append({
+                    "display_name": display_name,
+                    "csv_field": actual_csv_field
+                })
+
+        # 既存の辞書形式からも確認（後方互換性）
+        for display_name, csv_field in existing_modal_fields_dict.items():
+            if csv_field in csv_columns and not any(item['display_name'] == display_name for item in new_modal_fields_list):
+                new_modal_fields_list.append({
+                    "display_name": display_name,
+                    "csv_field": csv_field
+                })
+
+        # CSVに新しいカラムがある場合、末尾に追加
+        for col in csv_columns:
+            if not any(item['csv_field'] == col for item in new_modal_fields_list):
+                new_modal_fields_list.append({
+                    "display_name": col,
+                    "csv_field": col
+                })
+
+        # 設定を更新
+        self.config['modal_fields_list'] = new_modal_fields_list
+        self.config['modal_fields'] = {item['display_name']: item['csv_field'] for item in new_modal_fields_list}
         self.config['disabled_modal_fields'] = {}
 
         # UIを再構築（ポップアップ表示項目タブのみ）
@@ -683,20 +722,30 @@ class ConfigEditorApp:
             widget.destroy()
         self.modal_field_entries = []
 
-        # 有効な項目を表示
-        existing_fields = self.config.get('modal_fields', {})
+        # ✨ 順序付きリストを優先的に使用（新形式）
+        modal_fields_list = self.config.get('modal_fields_list', [])
         disabled_fields = self.config.get('disabled_modal_fields', {})
 
-        # 有効な項目を追加
-        if existing_fields:
-            for display_name, csv_field in existing_fields.items():
-                self.add_modal_field_entry(display_name, csv_field, enabled=True)
+        # modal_fields_listが存在する場合（新形式）
+        if modal_fields_list:
+            for field_item in modal_fields_list:
+                display_name = field_item.get('display_name', '')
+                csv_field = field_item.get('csv_field', '')
+                if display_name and csv_field:
+                    self.add_modal_field_entry(display_name, csv_field, enabled=True)
+        else:
+            # フォールバック：従来の辞書形式を使用（後方互換性）
+            existing_fields = self.config.get('modal_fields', {})
+            if existing_fields:
+                for display_name, csv_field in existing_fields.items():
+                    self.add_modal_field_entry(display_name, csv_field, enabled=True)
 
         # 無効化された項目も復元（チェックボックスはオフ状態で）
         if disabled_fields:
             for display_name, csv_field in disabled_fields.items():
                 # 有効な項目と重複しないもののみ追加
-                if display_name not in existing_fields:
+                existing_enabled = [item.get('display_name') for item in modal_fields_list]
+                if display_name not in existing_enabled and display_name not in self.config.get('modal_fields', {}):
                     self.add_modal_field_entry(display_name, csv_field, enabled=False)
 
     def add_modal_field_entry(self, display_name="", csv_field="", enabled=False):
